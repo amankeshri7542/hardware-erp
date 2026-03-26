@@ -1,0 +1,136 @@
+.billing-page {
+  padding: 16px 24px;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.billing-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.billing-body {
+  min-height: calc(100vh - 140px);
+}
+
+.billing-card {
+  margin-bottom: 12px;
+}
+
+.billing-card .ant-card-body {
+  padding: 12px 16px;
+}
+
+.billing-items-card .ant-card-body {
+  padding: 0 0 8px 0;
+}
+
+.billing-items-card .ant-card-head {
+  min-height: 40px;
+  padding: 0 16px;
+}
+
+.billing-items-card .ant-card-head-title {
+  padding: 8px 0;
+}
+
+/* Selected customer display */
+.selected-customer {
+  padding: 4px 0;
+}
+
+/* Totals card */
+.totals-card .ant-card-body {
+  padding: 16px;
+}
+
+.totals-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.grand-total-row {
+  padding: 8px 0 4px 0;
+}
+
+/* Payment card */
+.payment-card .ant-card-body {
+  padding: 12px 16px;
+}
+
+.balance-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+/* Payment modes list */
+.payment-modes-list {
+  margin-bottom: 8px;
+}
+
+.payment-mode-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.payment-mode-entry:last-child {
+  border-bottom: none;
+}
+
+/* Success modal */
+.success-modal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0 8px 0;
+}
+
+.success-modal-content .ant-descriptions {
+  width: 100%;
+}
+
+/* Table tweaks for billing */
+.billing-items-card .ant-table-thead > tr > th {
+  padding: 8px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fafafa;
+}
+
+.billing-items-card .ant-table-tbody > tr > td {
+  padding: 6px 8px;
+}
+
+.billing-items-card .ant-input-number {
+  border-radius: 4px;
+}
+
+.billing-items-card .ant-input-number-input {
+  text-align: right;
+  padding: 2px 8px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) {
+  .billing-page {
+    padding: 12px;
+  }
+
+  .billing-body .ant-col {
+    margin-bottom: 8px;
+  }
+}
+
+/* Product search card override — no padding above search */
+.billing-product-search .ant-card-body {
+  padding: 8px 12px;
+}

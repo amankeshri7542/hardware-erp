@@ -1,0 +1,137 @@
+.product-search-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.product-search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1050;
+  margin-top: 4px;
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08),
+              0 3px 6px -4px rgba(0, 0, 0, 0.12),
+              0 9px 28px 8px rgba(0, 0, 0, 0.05);
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.product-search-frequent {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.frequent-label {
+  font-size: 11px;
+  color: #8c8c8c;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.frequent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.frequent-chip {
+  cursor: pointer;
+  border-radius: 16px;
+  padding: 2px 12px;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.frequent-chip:hover {
+  background: #1677ff;
+  color: #fff;
+  border-color: #1677ff;
+}
+
+.product-search-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
+.product-search-results {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.product-search-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.product-search-item:hover,
+.product-search-item.highlighted {
+  background: #f5f5f5;
+}
+
+.item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.item-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1a1a1a;
+}
+
+.item-unit {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.item-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.item-price {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1a1a1a;
+}
+
+.item-stock {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+.item-stock.in-stock {
+  background: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.item-stock.no-stock {
+  background: #fff2f0;
+  color: #ff4d4f;
+  border: 1px solid #ffccc7;
+  font-weight: 600;
+}
+
+.product-search-empty {
+  padding: 24px 16px;
+}

@@ -1,0 +1,94 @@
+const express = require('express');
+const router = express.Router();
+const authenticateJWT = require('../../middleware/authenticateJWT');
+const validate = require('../../middleware/validate');
+const { createProductSchema, updateProductSchema } = require('./products.validation');
+const controller = require('./products.controller');
+const searchService = require('./products.search.service');
+
+// All routes require authentication
+router.use(authenticateJWT);
+
+// ─── Static routes MUST come BEFORE /:id ───────────────────────────
+
+// Search: GET /products/search?q=cement&limit=8  OR  ?barcode=123456
+router.get('/search', async (req, res, next) => {
+  try {
+    const { q, barcode, limit = 8 } = req.query;
+
+    if (barcode) {
+      const product = await searchService.searchByBarcode(barcode);
+      const products = product
+        ? [{ ...product, stock_status: product.current_stock > 0 ? 'in_stock' : 'no_stock' }]
+        : [];
+      return res.json({ success: true, data: { products, searchType: 'barcode' } });
+    }
+
+    if (q && q.trim().length >= 2) {
+      const results = await searchService.searchByName(q.trim(), parseInt(limit, 10) || 8);
+      const products = results.map((p) => ({
+        ...p,
+        stock_status: p.current_stock > 0 ? 'in_stock' : 'no_stock',
+      }));
+      return res.json({ success: true, data: { products, searchType: 'name', query: q } });
+    }
+
+    return res.json({ success: true, data: { products: [], searchType: 'name', query: q || '' } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Frequent products for billing chips
+router.get('/frequent', async (req, res, next) => {
+  try {
+    const products = await searchService.getFrequentProducts(6);
+    return res.json({ success: true, data: { products } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Low stock products
+router.get('/low-stock', controller.getLowStock);
+
+// Barcode scanner shortcut: GET /products/barcode/:code
+router.get('/barcode/:code', async (req, res, next) => {
+  try {
+    const product = await searchService.searchByBarcode(req.params.code);
+    if (!product) {
+      return res.json({ success: true, data: { products: [], searchType: 'barcode' } });
+    }
+    return res.json({
+      success: true,
+      data: {
+        products: [{ ...product, stock_status: product.current_stock > 0 ? 'in_stock' : 'no_stock' }],
+        searchType: 'barcode',
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── CRUD routes ───────────────────────────────────────────────────
+
+// List products
+router.get('/', controller.listProducts);
+
+// Create product
+router.post('/', createProductSchema, validate, controller.createProduct);
+
+// Get single product (must be AFTER all static routes)
+router.get('/:id', controller.getProduct);
+
+// Update product
+router.put('/:id', updateProductSchema, validate, controller.updateProduct);
+
+// Soft delete product
+router.delete('/:id', controller.deleteProduct);
+
+// Stock ledger for a product
+router.get('/:id/stock-ledger', controller.getStockLedger);
+
+module.exports = router;

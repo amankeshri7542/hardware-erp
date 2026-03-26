@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>{{invoiceNo}}</title>
+<style>
+  @page { size: 80mm auto; margin: 0; }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    color: #000;
+    background: #fff;
+    width: 72mm;
+    padding: 4mm;
+    line-height: 1.4;
+  }
+
+  .center { text-align: center; }
+  .right { text-align: right; }
+  .bold { font-weight: 700; }
+  .small { font-size: 9px; }
+
+  .sep {
+    border: none;
+    border-top: 1px dashed #000;
+    margin: 4px 0;
+  }
+
+  .store-name {
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 2px;
+  }
+
+  .meta-line {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+  }
+
+  .item-row {
+    margin-bottom: 3px;
+  }
+  .item-name {
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .item-calc {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    padding-left: 8px;
+  }
+
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+  }
+  .total-row.grand {
+    font-size: 13px;
+    font-weight: 700;
+    border-top: 1px dashed #000;
+    padding-top: 3px;
+    margin-top: 2px;
+  }
+
+  .footer-msg {
+    text-align: center;
+    font-size: 9px;
+    margin-top: 8px;
+    color: #333;
+  }
+</style>
+</head>
+<body>
+
+<div class="store-name">{{storeName}}</div>
+<div class="center small">{{storeAddress}}</div>
+<div class="center small">Ph: {{storePhone}}</div>
+<div class="center small">GSTIN: {{storeGstin}}</div>
+
+<hr class="sep" />
+
+<div class="center bold">{{billTypeLabel}}</div>
+
+<div class="meta-line"><span>No: {{invoiceNo}}</span><span>{{date}}</span></div>
+<div class="meta-line"><span>Customer:</span><span>{{customerName}}</span></div>
+<div class="meta-line"><span>Phone:</span><span>{{customerPhone}}</span></div>
+{{#SHOW_CUSTOMER_GSTIN}}<div class="meta-line small"><span>GSTIN:</span><span>{{customerGstin}}</span></div>{{/SHOW_CUSTOMER_GSTIN}}
+
+<hr class="sep" />
+
+{{#items}}
+<div class="item-row">
+  <div class="item-name">{{product_name}}</div>
+  <div class="item-calc">
+    <span>{{quantity}} {{unit}} x {{rate}}</span>
+    <span>{{total}}</span>
+  </div>
+</div>
+{{/items}}
+
+<hr class="sep" />
+
+<div class="total-row"><span>Subtotal</span><span>{{subtotal}}</span></div>
+{{#SHOW_DISCOUNT_ROW}}<div class="total-row"><span>Discount</span><span>-{{discountTotal}}</span></div>{{/SHOW_DISCOUNT_ROW}}
+<div class="total-row"><span>GST</span><span>{{totalGst}}</span></div>
+<div class="total-row grand"><span>TOTAL</span><span>{{grandTotal}}</span></div>
+
+<div class="small" style="margin-top:2px;">{{grandTotalWords}}</div>
+
+<hr class="sep" />
+
+<div class="total-row"><span>Paid ({{paymentMode}})</span><span>{{amountPaid}}</span></div>
+{{#SHOW_BALANCE_DUE}}<div class="total-row bold"><span>Balance Due</span><span>{{balanceDue}}</span></div>{{/SHOW_BALANCE_DUE}}
+
+<hr class="sep" />
+
+<div class="footer-msg">Thank you for your purchase!</div>
+<div class="footer-msg">This is a computer generated receipt.</div>
+
+</body>
+</html>

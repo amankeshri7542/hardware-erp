@@ -1,0 +1,381 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  Input, InputNumber, Button, Table, Tag, Modal, Radio, Alert, message,
+  Row, Col, Card, Typography, Space, Spin, Divider,
+} from 'antd';
+import { DeleteOutlined, PrinterOutlined, DownloadOutlined } from '@ant-design/icons';
+import { useBilling } from '../../hooks/useBilling';
+import ProductSearch from '../../components/ProductSearch/ProductSearch';
+import { formatINR } from '../../utils/formatCurrency';
+import { pollPdfStatus } from '../../utils/pdfPoller';
+import { getPdfUrl } from '../../api/invoices.api';
+
+const { Title, Text } = Typography;
+
+export default function QuickBillPage() {
+  const billing = useBilling('quickbill');
+  const [walkinName, setWalkinName] = useState('');
+  const [successData, setSuccessData] = useState(null);
+  const [pdfReady, setPdfReady] = useState(false);
+  const [pdfError, setPdfError] = useState(false);
+  const productSearchRef = useRef(null);
+  const qtyRefs = useRef({});
+  const cleanupRef = useRef(null);
+
+  // Ensure billType is always quickbill
+  useEffect(() => {
+    billing.setBillType('quickbill');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // F9 shortcut to submit
+  const handleSubmit = useCallback(async () => {
+    if (billing.totals.grand_total <= 0) {
+      message.error('Add at least one item');
+      return;
+    }
+
+    // Quick bill: full payment required, set amount to match total
+    billing.setPaymentAmount(billing.totals.grand_total);
+
+    // Ensure at least one payment mode is present
+    if (billing.payment.modes.length === 0) {
+      billing.addPaymentMode('cash', billing.totals.grand_total, '');
+    } else {
+      // Update existing mode amount to match grand total
+      const currentMode = billing.payment.modes[0]?.mode || 'cash';
+      billing.removePaymentMode(0);
+      billing.addPaymentMode(currentMode, billing.totals.grand_total, '');
+    }
+
+    // Attach walkin name if provided
+    if (walkinName.trim()) {
+      billing.setCustomer({ name: walkinName.trim() });
+    }
+
+    const result = await billing.submitInvoice();
+    if (result) {
+      setSuccessData(result);
+      cleanupRef.current = pollPdfStatus(result.invoice_id, {
+        onReady: () => setPdfReady(true),
+        onFailed: () => setPdfError(true),
+        onTimeout: () => setPdfError(true),
+      });
+    }
+  }, [billing, walkinName]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'F9') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [handleSubmit]);
+
+  // Cleanup PDF poller on unmount
+  useEffect(() => {
+    return () => {
+      if (cleanupRef.current) cleanupRef.current();
+    };
+  }, []);
+
+  const handleProductSelect = useCallback((product) => {
+    const idx = billing.addItem(product);
+    setTimeout(() => qtyRefs.current[idx]?.select(), 50);
+  }, [billing]);
+
+  const handlePaymentModeChange = useCallback((e) => {
+    const mode = e.target.value;
+    const amount = billing.totals.grand_total;
+    // Replace existing mode
+    if (billing.payment.modes.length > 0) {
+      billing.removePaymentMode(0);
+    }
+    billing.addPaymentMode(mode, amount, '');
+  }, [billing]);
+
+  const handleNewBill = useCallback(() => {
+    if (cleanupRef.current) {
+      cleanupRef.current();
+      cleanupRef.current = null;
+    }
+    setSuccessData(null);
+    setPdfReady(false);
+    setPdfError(false);
+    setWalkinName('');
+    billing.resetBilling();
+    billing.setBillType('quickbill');
+  }, [billing]);
+
+  const handlePrint = useCallback(async () => {
+    if (!successData) return;
+    try {
+      const { data } = await getPdfUrl(successData.invoice_id);
+      window.open(data.data.url, '_blank');
+    } catch {
+      message.error('Failed to get PDF');
+    }
+  }, [successData]);
+
+  const columns = [
+    {
+      title: '#',
+      width: 40,
+      align: 'center',
+      render: (_, __, i) => i + 1,
+    },
+    {
+      title: 'Product',
+      dataIndex: 'product_name_snapshot',
+      ellipsis: true,
+    },
+    {
+      title: 'Qty',
+      dataIndex: 'qty',
+      width: 90,
+      render: (val, _, i) => (
+        <InputNumber
+          ref={(el) => { qtyRefs.current[i] = el; }}
+          min={0.001}
+          precision={3}
+          value={val}
+          size="small"
+          style={{ width: '100%' }}
+          onChange={(v) => billing.updateItem(i, 'qty', v)}
+          onFocus={(e) => e.target.select()}
+          onPressEnter={() => productSearchRef.current?.focus()}
+        />
+      ),
+    },
+    {
+      title: 'Rate',
+      dataIndex: 'rate',
+      width: 100,
+      align: 'right',
+      render: (v) => formatINR(v),
+    },
+    {
+      title: 'GST%',
+      dataIndex: 'gst_pct',
+      width: 60,
+      align: 'center',
+    },
+    {
+      title: 'Total',
+      dataIndex: 'net_amount',
+      width: 110,
+      align: 'right',
+      render: (v) => formatINR(v),
+    },
+    {
+      title: '',
+      width: 40,
+      render: (_, __, i) => (
+        <Button
+          type="text"
+          danger
+          size="small"
+          icon={<DeleteOutlined />}
+          onClick={() => billing.removeItem(i)}
+        />
+      ),
+    },
+  ];
+
+  const currentMode = billing.payment.modes[0]?.mode || 'cash';
+
+  return (
+    <div style={{ padding: 24 }}>
+      <Card>
+        <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+          <Col>
+            <Title level={4} style={{ margin: 0 }}>
+              Quick Bill <Tag color="orange">Walk-In</Tag>
+            </Title>
+          </Col>
+        </Row>
+
+        {/* Error alerts */}
+        {billing.errors.stock && (
+          <Alert
+            type="error"
+            message="Stock unavailable"
+            description={
+              Array.isArray(billing.errors.stock)
+                ? billing.errors.stock
+                    .map((f) => `${f.product_name}: requested ${f.requested}, available ${f.available}`)
+                    .join('; ')
+                : billing.errors.stock
+            }
+            closable
+            onClose={() => billing.setErrors({})}
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        {billing.errors.submit && (
+          <Alert
+            type="error"
+            message={billing.errors.submit}
+            closable
+            onClose={() => billing.setErrors({})}
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        {billing.errors.items && (
+          <Alert
+            type="warning"
+            message={billing.errors.items}
+            closable
+            onClose={() => billing.setErrors({})}
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
+        <Row gutter={24}>
+          {/* Left: Product entry + items */}
+          <Col xs={24} lg={16}>
+            <Input
+              placeholder="Walk-in customer name (optional)"
+              value={walkinName}
+              onChange={(e) => setWalkinName(e.target.value)}
+              maxLength={100}
+              style={{ marginBottom: 16 }}
+              allowClear
+            />
+
+            <ProductSearch
+              ref={productSearchRef}
+              onSelect={handleProductSelect}
+              billType="retail"
+              autoFocus
+              placeholder="Search products..."
+            />
+
+            <Table
+              dataSource={billing.items}
+              columns={columns}
+              rowKey={(_, i) => i}
+              pagination={false}
+              size="small"
+              style={{ marginTop: 16 }}
+              locale={{ emptyText: 'Add products to begin' }}
+              summary={() =>
+                billing.items.length > 0 ? (
+                  <Table.Summary fixed>
+                    <Table.Summary.Row>
+                      <Table.Summary.Cell index={0} colSpan={5} align="right">
+                        <Text strong>
+                          {billing.totals.item_count} item(s) | Qty: {billing.totals.total_qty}
+                        </Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={5} align="right">
+                        <Text strong>{formatINR(billing.totals.grand_total)}</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell index={6} />
+                    </Table.Summary.Row>
+                  </Table.Summary>
+                ) : null
+              }
+            />
+          </Col>
+
+          {/* Right: Payment panel */}
+          <Col xs={24} lg={8}>
+            <Card size="small" title="Payment">
+              <div style={{ marginBottom: 16 }}>
+                <Radio.Group value={currentMode} onChange={handlePaymentModeChange}>
+                  <Radio.Button value="cash">Cash</Radio.Button>
+                  <Radio.Button value="upi">UPI</Radio.Button>
+                </Radio.Group>
+              </div>
+
+              <Divider style={{ margin: '12px 0' }} />
+
+              <Row justify="space-between" style={{ marginBottom: 4 }}>
+                <Text type="secondary">Subtotal</Text>
+                <Text>{formatINR(billing.totals.subtotal)}</Text>
+              </Row>
+              {billing.totals.total_discount > 0 && (
+                <Row justify="space-between" style={{ marginBottom: 4 }}>
+                  <Text type="secondary">Discount</Text>
+                  <Text>-{formatINR(billing.totals.total_discount)}</Text>
+                </Row>
+              )}
+              <Row justify="space-between" style={{ marginBottom: 4 }}>
+                <Text type="secondary">GST</Text>
+                <Text>{formatINR(billing.totals.total_gst)}</Text>
+              </Row>
+
+              <Divider style={{ margin: '12px 0' }} />
+
+              <div style={{ textAlign: 'right' }}>
+                <Text type="secondary">Grand Total</Text>
+                <Title level={3} style={{ margin: 0 }}>
+                  {formatINR(billing.totals.grand_total)}
+                </Title>
+              </div>
+
+              <Button
+                type="primary"
+                size="large"
+                block
+                style={{ marginTop: 24 }}
+                disabled={billing.items.length === 0 || billing.isSubmitting}
+                loading={billing.isSubmitting}
+                onClick={handleSubmit}
+              >
+                Quick Bill (F9)
+              </Button>
+            </Card>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* Success Modal */}
+      <Modal open={!!successData} footer={null} closable={false} width={420} centered>
+        {successData && (
+          <div style={{ textAlign: 'center', padding: 16 }}>
+            <Title level={3} style={{ marginBottom: 8 }}>{successData.invoice_no}</Title>
+            <Tag color="green" style={{ fontSize: 14, padding: '2px 12px' }}>PAID</Tag>
+
+            <Divider />
+
+            <Text strong style={{ fontSize: 18 }}>
+              Total: {formatINR(successData.grand_total)}
+            </Text>
+
+            <Divider />
+
+            {!pdfReady && !pdfError && (
+              <Space direction="vertical" align="center">
+                <Spin />
+                <Text type="secondary">Generating PDF...</Text>
+              </Space>
+            )}
+            {pdfReady && (
+              <Space>
+                <Button icon={<PrinterOutlined />} onClick={handlePrint}>
+                  Print
+                </Button>
+                <Button icon={<DownloadOutlined />} onClick={handlePrint}>
+                  Download
+                </Button>
+              </Space>
+            )}
+            {pdfError && (
+              <Text type="danger">PDF generation failed. You can download it later from invoice details.</Text>
+            )}
+
+            <Divider />
+
+            <Button type="primary" block size="large" onClick={handleNewBill}>
+              New Quick Bill
+            </Button>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
