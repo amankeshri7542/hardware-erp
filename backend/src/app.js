@@ -54,14 +54,22 @@ app.use('/api/reports', exportsRouter);
 const settingsRouter = require('./modules/settings/settings.router');
 app.use('/api/settings', settingsRouter);
 
-// Serve Frontend in Production
+// Serve Frontend in Production (fallback if nginx is not used)
+// When nginx handles static files, this block is harmless but provides a safety net.
 if (process.env.NODE_ENV === 'production') {
   const path = require('path');
-  const frontendDistPath = path.join(__dirname, '../../../frontend/dist');
+  const frontendDistPath = path.join(__dirname, '../../frontend/dist');
   app.use(express.static(frontendDistPath));
 
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  // Only serve index.html for non-API routes (avoid catching /api/* 404s)
+  app.get(/^(?!\/api).*/, (req, res, next) => {
+    const indexPath = path.join(frontendDistPath, 'index.html');
+    const fs = require('fs');
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      next();
+    }
   });
 }
 
