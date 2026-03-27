@@ -31,6 +31,13 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# ─── SSH / Keys ─────────────────────────────────────
+*.pem
+*.key
+
+# ─── PDF Local Output ──────────────────────────────
+pdf-output/
+
 # ─── Misc ────────────────────────────────────────────
 .ebextensions/*.bak
 .elasticbeanstalk/

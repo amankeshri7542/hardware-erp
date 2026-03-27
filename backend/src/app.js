@@ -11,7 +11,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // CORS
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true,
 }));
 
@@ -54,7 +54,19 @@ app.use('/api/reports', exportsRouter);
 const settingsRouter = require('./modules/settings/settings.router');
 app.use('/api/settings', settingsRouter);
 
+// Serve Frontend in Production
+if (process.env.NODE_ENV === 'production') {
+  const path = require('path');
+  const frontendDistPath = path.join(__dirname, '../../../frontend/dist');
+  app.use(express.static(frontendDistPath));
+
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+}
+
 // Global error handler (must be last)
 app.use(errorHandler);
 
 module.exports = app;
+
