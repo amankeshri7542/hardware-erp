@@ -1,3 +1,44 @@
+/* Keyboard shortcuts bar */
+.shortcuts-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 16px;
+  background: #1f1f1f;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  overflow-x: auto;
+}
+
+.shortcuts-bar .shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #d9d9d9;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.shortcuts-bar .shortcut-key {
+  display: inline-block;
+  padding: 1px 6px;
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 3px;
+  color: #fff;
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 24px;
+  text-align: center;
+}
+
+.shortcuts-bar .shortcut-label {
+  color: #aaa;
+  font-size: 11px;
+}
+
 .billing-page {
   padding: 16px 24px;
   max-width: 1440px;

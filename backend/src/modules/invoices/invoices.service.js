@@ -288,7 +288,7 @@ async function getInvoiceById(id) {
       i.bill_type, i.date, i.subtotal, i.discount_total,
       i.taxable_total, i.gst_total, i.grand_total, i.total_cost,
       i.profit_amount, i.profit_pct, i.amount_paid, i.balance_due,
-      i.due_date, i.status, i.pdf_status, i.pdf_url, i.notes,
+      i.due_date, i.status, i.pdf_status, i.pdf_url,
       i.created_by, i.created_at,
       c.name AS customer_name, c.phone AS customer_phone,
       c.gstin AS customer_gstin,

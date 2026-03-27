@@ -69,11 +69,35 @@ export default function BillingPage() {
         e.preventDefault();
         handleSubmit();
       }
+      // F4 → pay full amount
+      if (e.key === 'F4') {
+        e.preventDefault();
+        handlePayFull();
+      }
+      // Esc → clear bill (only if items exist, no confirmation)
+      if (e.key === 'Escape') {
+        if (items.length > 0) {
+          e.preventDefault();
+          resetBilling();
+          setWalkinName('');
+          setPayModeAmount(0);
+          setPayModeRef('');
+          message.info('Bill cleared');
+        }
+      }
+      // Ctrl+P → print last invoice
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        if (submittedInvoice) {
+          e.preventDefault();
+          const pdfUrl = `${import.meta.env.VITE_API_URL || '/api'}/invoices/${submittedInvoice.invoice_id}/pdf`;
+          window.open(pdfUrl, '_blank');
+        }
+      }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [billType, items, customer, payment]);
+  }, [billType, items, customer, payment, submittedInvoice]);
 
   // ───── Product selected → add item, focus qty ─────
   const handleProductSelect = useCallback((product) => {
@@ -113,10 +137,10 @@ export default function BillingPage() {
 
     const result = await submitInvoice();
     if (result) {
-      message.success(`Invoice ${result.invoice_number || result.id} created!`);
+      message.success(`Invoice ${result.invoice_no || result.invoice_id} created!`);
       setSubmittedInvoice(result);
       setShowSuccessModal(true);
-      startPdfPolling(result.id);
+      startPdfPolling(result.invoice_id);
     }
   };
 
@@ -130,7 +154,7 @@ export default function BillingPage() {
       attempts++;
       try {
         const { data } = await getPdfStatus(invoiceId);
-        if (data.data?.status === 'ready' || data.data?.pdf_url) {
+        if (data.data?.pdf_status === 'ready' || data.data?.pdf_url) {
           clearInterval(pdfPollRef.current);
           setPdfReady(true);
           setPdfPolling(false);
@@ -293,8 +317,48 @@ export default function BillingPage() {
     },
   ];
 
+  const kbdStyle = {
+    display: 'inline-block',
+    padding: '1px 6px',
+    border: '1px solid #555',
+    borderRadius: 3,
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#fff',
+    backgroundColor: '#333',
+    marginRight: 4,
+    lineHeight: '18px',
+  };
+
+  const shortcutItemStyle = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    marginRight: 16,
+    fontSize: 12,
+    color: '#ccc',
+  };
+
   return (
     <div className="billing-page">
+      {/* Keyboard shortcuts bar */}
+      <div style={{
+        background: '#1f1f1f',
+        padding: '6px 16px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 4,
+        borderBottom: '1px solid #333',
+      }}>
+        <span style={shortcutItemStyle}><span style={kbdStyle}>F2</span> Quick Bill</span>
+        <span style={shortcutItemStyle}><span style={kbdStyle}>F9</span> Finalize</span>
+        <span style={shortcutItemStyle}><span style={kbdStyle}>F4</span> Pay Full</span>
+        <span style={shortcutItemStyle}><span style={kbdStyle}>Esc</span> Clear Bill</span>
+        <span style={shortcutItemStyle}><span style={kbdStyle}>Enter</span> Add Item</span>
+        <span style={shortcutItemStyle}><span style={kbdStyle}>Ctrl+P</span> Print Last Invoice</span>
+      </div>
+
       {/* Header */}
       <div className="billing-header">
         <Title level={3} style={{ margin: 0 }}>New Bill</Title>
@@ -302,7 +366,6 @@ export default function BillingPage() {
           <Tag color={billType === 'quickbill' ? 'orange' : billType === 'wholesale' ? 'blue' : 'green'}>
             {billType === 'quickbill' ? 'Quick Bill' : billType === 'wholesale' ? 'Wholesale' : 'Retail'}
           </Tag>
-          <Text type="secondary">F2: Quick Bill | F9: Submit</Text>
         </Space>
       </div>
 
@@ -684,28 +747,32 @@ export default function BillingPage() {
 
             <Descriptions column={1} size="small" bordered>
               <Descriptions.Item label="Invoice #">
-                <Text strong>{submittedInvoice.invoice_number || submittedInvoice.id}</Text>
+                <Text strong>{submittedInvoice.invoice_no}</Text>
               </Descriptions.Item>
-              <Descriptions.Item label="Date">
-                {formatDate(submittedInvoice.date || submittedInvoice.created_at)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Customer">
-                {submittedInvoice.customer_name || submittedInvoice.customer_name_walkin || 'Walk-in'}
+              <Descriptions.Item label="Type">
+                <Tag color={submittedInvoice.bill_type === 'quickbill' ? 'orange' : submittedInvoice.bill_type === 'wholesale' ? 'blue' : 'green'}>
+                  {submittedInvoice.bill_type}
+                </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Total">
                 <Text strong style={{ color: '#1677ff' }}>
-                  {formatINR(submittedInvoice.grand_total || submittedInvoice.total)}
+                  {formatINR(submittedInvoice.grand_total)}
                 </Text>
               </Descriptions.Item>
               <Descriptions.Item label="Paid">
                 {formatINR(submittedInvoice.amount_paid || 0)}
               </Descriptions.Item>
+              <Descriptions.Item label="Balance">
+                <Text type={submittedInvoice.balance_due > 0 ? 'danger' : 'success'}>
+                  {formatINR(submittedInvoice.balance_due || 0)}
+                </Text>
+              </Descriptions.Item>
               <Descriptions.Item label="Status">
                 <Tag color={
-                  submittedInvoice.payment_status === 'paid' ? 'success' :
-                  submittedInvoice.payment_status === 'partial' ? 'warning' : 'error'
+                  submittedInvoice.status === 'paid' ? 'success' :
+                  submittedInvoice.status === 'partial' ? 'warning' : 'error'
                 }>
-                  {submittedInvoice.payment_status || paymentStatus}
+                  {submittedInvoice.status}
                 </Tag>
               </Descriptions.Item>
             </Descriptions>
@@ -723,7 +790,7 @@ export default function BillingPage() {
                   type="primary"
                   icon={<PrinterOutlined />}
                   onClick={() => {
-                    const pdfUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/invoices/${submittedInvoice.id}/pdf`;
+                    const pdfUrl = `${import.meta.env.VITE_API_URL || '/api'}/invoices/${submittedInvoice.invoice_id}/pdf`;
                     window.open(pdfUrl, '_blank');
                   }}
                 >
@@ -734,7 +801,7 @@ export default function BillingPage() {
                 <Button
                   icon={<PrinterOutlined />}
                   onClick={() => {
-                    const pdfUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}/invoices/${submittedInvoice.id}/pdf`;
+                    const pdfUrl = `${import.meta.env.VITE_API_URL || '/api'}/invoices/${submittedInvoice.invoice_id}/pdf`;
                     window.open(pdfUrl, '_blank');
                   }}
                 >

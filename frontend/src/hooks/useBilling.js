@@ -139,7 +139,7 @@ export function useBilling(initialBillType = 'retail') {
       const { data } = await createInvoice(payload);
       return data.data;
     } catch (err) {
-      if (err.response?.data?.errorCode === 'INSUFFICIENT_STOCK') {
+      if (err.response?.data?.code === 'INSUFFICIENT_STOCK') {
         setErrors({ stock: err.response.data.failures || err.response.data.error });
       } else {
         setErrors({ submit: err.response?.data?.error || 'Failed to create invoice' });
