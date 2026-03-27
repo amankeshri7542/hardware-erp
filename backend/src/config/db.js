@@ -8,6 +8,7 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   min: parseInt(process.env.DB_POOL_MIN, 10) || 5,
   max: parseInt(process.env.DB_POOL_MAX, 10) || 20,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
 async function testConnection() {
