@@ -65,7 +65,7 @@ export default function LoginPage() {
       <Card className="login-card" bordered={false}>
         <div className="login-header">
           <Title level={3} className="login-title">
-            Hardware ERP
+            UMA Enterprises
           </Title>
           <Text className="login-subtitle">
             Sign in to your account

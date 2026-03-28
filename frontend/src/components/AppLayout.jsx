@@ -97,7 +97,7 @@ export default function AppLayout() {
               transition: 'font-size 0.2s',
             }}
           >
-            {collapsed ? 'HW' : 'Hardware ERP'}
+            {collapsed ? 'UE' : 'UMA Enterprises'}
           </Text>
         </div>
 
@@ -164,7 +164,7 @@ export default function AppLayout() {
         </Content>
 
         <Footer style={{ textAlign: 'center', padding: '12px 24px' }}>
-          <Text type="secondary">Hardware ERP v1.0</Text>
+          <Text type="secondary">UMA Enterprises v1.0</Text>
         </Footer>
       </Layout>
     </Layout>
