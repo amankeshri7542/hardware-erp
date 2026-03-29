@@ -18,3 +18,20 @@ export const getLowStockProducts = () => api.get('/products/low-stock');
 export const getFrequentProducts = () => api.get('/products/frequent');
 
 export const searchProducts = (params) => api.get('/products/search', { params });
+
+export const getUnitConversions = (id) => api.get(`/products/${id}/unit-conversions`);
+
+export const createUnitConversion = (id, data) =>
+  api.post(`/products/${id}/unit-conversions`, data);
+
+export const deleteUnitConversion = (conversionId) =>
+  api.delete(`/products/unit-conversions/${conversionId}`);
+
+export const getProductPriceHistory = (id) =>
+  api.get(`/products/${id}/price-history`);
+
+export const getProductSuppliers = (id) =>
+  api.get(`/products/${id}/suppliers`);
+
+export const linkProductSupplier = (id, data) =>
+  api.post(`/products/${id}/suppliers`, data);

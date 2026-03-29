@@ -24,7 +24,8 @@ const GST_OPTIONS = [
 
 const CATEGORY_OPTIONS = [
   'Hardware', 'Plumbing', 'Electrical', 'Paint', 'Tools',
-  'Cement', 'Iron & Steel', 'Sanitary', 'Wood', 'Glass',
+  'Cement', 'Steel', 'Sanitary', 'Pipes', 'Adhesive',
+  'Waterproofing', 'Wood', 'Glass', 'Iron & Steel',
 ];
 
 export default function ProductFormModal({ open, onClose, onSuccess, productId }) {
@@ -44,7 +45,7 @@ export default function ProductFormModal({ open, onClose, onSuccess, productId }
         .finally(() => setFetching(false));
     } else if (open) {
       form.resetFields();
-      form.setFieldsValue({ unit: 'piece', gst_rate: 18, min_stock: 0, is_active: true });
+      form.setFieldsValue({ unit: 'piece', gst_rate: 18, min_stock: 0, current_stock: 0, is_active: true });
     }
   }, [open, productId, form]);
 
@@ -163,6 +164,15 @@ export default function ProductFormModal({ open, onClose, onSuccess, productId }
             <Form.Item name="min_stock" label="Min Stock Level"
               rules={[{ required: true, message: 'Required' }]}>
               <InputNumber min={0} style={{ width: '100%' }} />
+            </Form.Item>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Form.Item name="current_stock" label="Current Stock"
+              extra={isEdit ? 'Set overall stock quantity' : 'Initial stock quantity'}
+              rules={[{ required: true, message: 'Required' }]}>
+              <InputNumber min={0} precision={3} style={{ width: '100%' }}
+                placeholder="0" />
             </Form.Item>
           </div>
 

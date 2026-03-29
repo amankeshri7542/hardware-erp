@@ -17,7 +17,7 @@ const PRODUCT_INSERT_COLUMNS = [
 const UPDATABLE_FIELDS = new Set([
   'name', 'category', 'brand', 'sku', 'barcode', 'unit', 'hsn_code',
   'gst_rate', 'mrp', 'wholesale_price', 'purchase_price',
-  'min_stock', 'is_active',
+  'min_stock', 'is_active', 'current_stock',
 ]);
 
 /**
@@ -126,8 +126,22 @@ async function createProduct(data) {
 
 /**
  * Dynamic UPDATE — only updates fields present in data.
+ * If current_stock is being changed, creates a stock_ledger entry.
  */
-async function updateProduct(id, data) {
+async function updateProduct(id, data, userId) {
+  const hasStockChange = data.current_stock !== undefined;
+  let oldStock = null;
+
+  // If stock is changing, get old stock first for the ledger entry
+  if (hasStockChange) {
+    const existing = await pool.query(
+      'SELECT current_stock FROM products WHERE id = $1', [id]
+    );
+    if (existing.rows.length > 0) {
+      oldStock = parseFloat(existing.rows[0].current_stock);
+    }
+  }
+
   const fields = [];
   const values = [];
   let idx = 1;
@@ -164,6 +178,29 @@ async function updateProduct(id, data) {
       error.errorCode = 'PRODUCT_NOT_FOUND';
       throw error;
     }
+
+    // Create stock_ledger entry for manual stock adjustment
+    if (hasStockChange && oldStock !== null) {
+      const newStock = parseFloat(data.current_stock);
+      const diff = newStock - oldStock;
+      if (diff !== 0) {
+        await pool.query(
+          `INSERT INTO stock_ledger (
+            product_id, date, movement_type, reference_id, reference_type,
+            qty_in, qty_out, stock_after, notes, created_by
+          ) VALUES ($1, NOW(), 'adjustment', NULL, 'manual', $2, $3, $4, $5, $6)`,
+          [
+            id,
+            diff > 0 ? diff : 0,
+            diff < 0 ? Math.abs(diff) : 0,
+            newStock,
+            'Manual stock adjustment',
+            userId || null,
+          ]
+        );
+      }
+    }
+
     return rows[0];
   } catch (err) {
     if (err.code === '23505') {
@@ -263,6 +300,108 @@ async function getLowStockCount() {
   return parseInt(rows[0].count, 10);
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// PRICE HISTORY
+// ═══════════════════════════════════════════════════════════════════
+
+async function getProductPriceHistory(productId) {
+  const { rows } = await pool.query(
+    `SELECT pph.id, pph.effective_from, pph.purchase_price, pph.wholesale_price,
+            pph.mrp, pph.source, pph.created_at,
+            u.name AS changed_by_name
+     FROM product_price_history pph
+     LEFT JOIN users u ON u.id = pph.changed_by
+     WHERE pph.product_id = $1
+     ORDER BY pph.effective_from DESC, pph.id DESC`,
+    [productId],
+  );
+  return rows;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PRODUCT SUPPLIERS
+// ═══════════════════════════════════════════════════════════════════
+
+async function getProductSuppliers(productId) {
+  const { rows } = await pool.query(
+    `SELECT ps.id, ps.supplier_id, s.name AS supplier_name, s.phone AS supplier_phone,
+            ps.last_price, ps.last_purchase_date, ps.is_primary_supplier
+     FROM product_suppliers ps
+     JOIN suppliers s ON s.id = ps.supplier_id
+     WHERE ps.product_id = $1
+     ORDER BY ps.is_primary_supplier DESC, s.name ASC`,
+    [productId],
+  );
+  return rows;
+}
+
+async function linkProductSupplier(productId, data) {
+  const { rows } = await pool.query(
+    `INSERT INTO product_suppliers (product_id, supplier_id, last_price, is_primary_supplier)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (product_id, supplier_id)
+     DO UPDATE SET last_price = EXCLUDED.last_price,
+                   is_primary_supplier = EXCLUDED.is_primary_supplier
+     RETURNING id, product_id, supplier_id, last_price, is_primary_supplier`,
+    [productId, data.supplier_id, data.last_price || 0, data.is_primary_supplier || false],
+  );
+  return rows[0];
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// UNIT CONVERSIONS
+// ═══════════════════════════════════════════════════════════════════
+
+async function getUnitConversions(productId) {
+  const { rows } = await pool.query(
+    `SELECT id, product_id, unit_name, conversion_value, is_purchase_unit, is_sales_unit
+     FROM product_unit_conversions
+     WHERE product_id = $1
+     ORDER BY unit_name ASC`,
+    [productId],
+  );
+  return rows;
+}
+
+async function createUnitConversion(productId, data) {
+  const { rows } = await pool.query(
+    `INSERT INTO product_unit_conversions (product_id, unit_name, conversion_value, is_purchase_unit, is_sales_unit)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, product_id, unit_name, conversion_value, is_purchase_unit, is_sales_unit`,
+    [productId, data.unit_name, data.conversion_value, data.is_purchase_unit || false, data.is_sales_unit || false],
+  );
+  return rows[0];
+}
+
+async function deleteUnitConversion(productId, conversionId) {
+  const { rowCount } = await pool.query(
+    `DELETE FROM product_unit_conversions WHERE id = $1 AND product_id = $2`,
+    [conversionId, productId],
+  );
+  if (rowCount === 0) {
+    const error = new Error('Unit conversion not found');
+    error.statusCode = 404;
+    error.errorCode = 'CONVERSION_NOT_FOUND';
+    throw error;
+  }
+}
+
+/**
+ * Unlink a supplier from a product.
+ */
+async function unlinkProductSupplier(productId, linkId) {
+  const { rowCount } = await pool.query(
+    `DELETE FROM product_suppliers WHERE id = $1 AND product_id = $2`,
+    [linkId, productId],
+  );
+  if (rowCount === 0) {
+    const error = new Error('Product-supplier link not found');
+    error.statusCode = 404;
+    error.errorCode = 'PRODUCT_SUPPLIER_NOT_FOUND';
+    throw error;
+  }
+}
+
 module.exports = {
   getAllProducts,
   getProductById,
@@ -272,4 +411,11 @@ module.exports = {
   getProductStockLedger,
   getLowStockProducts,
   getLowStockCount,
+  getProductPriceHistory,
+  getProductSuppliers,
+  linkProductSupplier,
+  unlinkProductSupplier,
+  getUnitConversions,
+  createUnitConversion,
+  deleteUnitConversion,
 };

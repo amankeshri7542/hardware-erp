@@ -26,6 +26,7 @@ export default function CustomersPage() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('');
   const [showInactive, setShowInactive] = useState(false);
+  const [duesFilter, setDuesFilter] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [editCustomer, setEditCustomer] = useState(null);
 
@@ -46,6 +47,7 @@ export default function CustomersPage() {
       if (typeFilter !== 'all') params.type = typeFilter;
       if (cityFilter) params.city = cityFilter;
       if (!showInactive) params.is_active = 'true';
+      if (duesFilter !== 'all') params.dues_filter = duesFilter;
 
       const { data } = await listCustomers(params);
       setCustomers(data.data.customers);
@@ -55,7 +57,7 @@ export default function CustomersPage() {
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, debouncedSearch, typeFilter, cityFilter, showInactive]);
+  }, [pagination.page, pagination.limit, debouncedSearch, typeFilter, cityFilter, showInactive, duesFilter]);
 
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
 

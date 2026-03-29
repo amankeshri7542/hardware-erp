@@ -179,7 +179,7 @@ async function getCustomerById(id) {
 /**
  * List customers with filtering, search, and pagination.
  */
-async function listCustomers({ search, type, city, page = 1, limit = 20 }) {
+async function listCustomers({ search, type, city, dues_filter, page = 1, limit = 20 }) {
   const conditions = [];
   const values = [];
   let idx = 1;
@@ -197,6 +197,21 @@ async function listCustomers({ search, type, city, page = 1, limit = 20 }) {
       conditions.push(`name % $${idx++}`);
       values.push(trimmed);
     }
+  }
+
+  // Dues filter
+  if (dues_filter === 'outstanding') {
+    conditions.push('outstanding_balance > 0');
+  } else if (dues_filter === 'paid') {
+    conditions.push('outstanding_balance = 0');
+  } else if (dues_filter === 'overdue') {
+    conditions.push('outstanding_balance > 0');
+    conditions.push(`EXISTS (
+      SELECT 1 FROM invoices inv
+      WHERE inv.customer_id = customers.id
+        AND inv.status != 'paid'
+        AND inv.date < NOW() - INTERVAL '30 days'
+    )`);
   }
 
   if (type) {
@@ -235,8 +250,9 @@ async function listCustomers({ search, type, city, page = 1, limit = 20 }) {
 }
 
 /**
- * Quick search for billing screen — max 8 results.
- * Searches by phone prefix (if query starts with digit) or by fuzzy name match.
+ * Quick search for billing screen — max 10 results.
+ * Searches by phone (substring) and name/business_name (ILIKE).
+ * Priority: exact phone match first, then phone contains, then name matches.
  */
 async function searchCustomers(query) {
   if (!query || !query.trim()) {
@@ -244,31 +260,29 @@ async function searchCustomers(query) {
   }
 
   const trimmed = query.trim();
+  const pattern = `%${trimmed}%`;
 
-  // If query starts with a digit, search by phone prefix
-  if (/^\d/.test(trimmed)) {
-    const { rows } = await pool.query(
-      `SELECT ${SEARCH_COLUMNS}
-       FROM customers
-       WHERE phone LIKE $1 || '%' AND is_active = true
-       ORDER BY name ASC
-       LIMIT 8`,
-      [trimmed],
-    );
-    return rows;
-  }
-
-  // Otherwise, fuzzy name search using pg_trgm
   const { rows } = await pool.query(
-    `SELECT ${SEARCH_COLUMNS}
+    `SELECT ${SEARCH_COLUMNS},
+       CASE
+         WHEN phone = $1 THEN 1
+         WHEN phone ILIKE $2 THEN 2
+         ELSE 3
+       END AS sort_priority
      FROM customers
-     WHERE name % $1 AND is_active = true
-     ORDER BY similarity(name, $1) DESC
-     LIMIT 8`,
-    [trimmed],
+     WHERE is_active = true
+       AND (
+         phone ILIKE $2
+         OR name ILIKE $2
+         OR business_name ILIKE $2
+       )
+     ORDER BY sort_priority ASC, name ASC
+     LIMIT 10`,
+    [trimmed, pattern],
   );
 
-  return rows;
+  // Remove the sort_priority helper column before returning
+  return rows.map(({ sort_priority, ...rest }) => rest);
 }
 
 /**

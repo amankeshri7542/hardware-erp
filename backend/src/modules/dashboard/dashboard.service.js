@@ -36,7 +36,15 @@ async function getDashboardSummary() {
       (SELECT COUNT(p.id)
        FROM products p
        WHERE p.current_stock = 0
-         AND p.is_active = true) AS out_of_stock_count
+         AND p.is_active = true) AS out_of_stock_count,
+
+      (SELECT COALESCE(SUM(amount), 0)
+       FROM supplier_debit_notes
+       WHERE status = 'outstanding') AS outstanding_debit_notes_total,
+
+      (SELECT COUNT(id)
+       FROM supplier_debit_notes
+       WHERE status = 'outstanding') AS outstanding_debit_notes_count
   `);
 
   const row = rows[0];
@@ -48,6 +56,8 @@ async function getDashboardSummary() {
     total_products: parseInt(row.total_products, 10),
     low_stock_count: parseInt(row.low_stock_count, 10),
     out_of_stock_count: parseInt(row.out_of_stock_count, 10),
+    outstanding_debit_notes_total: parseFloat(row.outstanding_debit_notes_total),
+    outstanding_debit_notes_count: parseInt(row.outstanding_debit_notes_count, 10),
   };
 }
 

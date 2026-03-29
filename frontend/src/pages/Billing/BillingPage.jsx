@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Button, Input, InputNumber, Radio, Table, Tag, Modal, DatePicker,
+  Button, Input, InputNumber, Radio, Select, Table, Tag, Modal, DatePicker,
   Alert, message, Space, Row, Col, Card, Divider, Typography, Spin,
   Descriptions,
 } from 'antd';
@@ -8,12 +8,14 @@ import {
   DeleteOutlined, PrinterOutlined, PlusOutlined,
   ThunderboltOutlined, CheckCircleOutlined, CloseCircleOutlined,
   WalletOutlined, CreditCardOutlined, BankOutlined, QrcodeOutlined,
+  EditOutlined,
 } from '@ant-design/icons';
 import ProductSearch from '../../components/ProductSearch/ProductSearch';
 import CustomerSearch from '../../components/CustomerSearch/CustomerSearch';
 import { useBilling } from '../../hooks/useBilling';
 import { formatINR, formatDate } from '../../utils/formatCurrency';
 import { getPdfStatus } from '../../api/invoices.api';
+import { getUnitConversions } from '../../api/products.api';
 import './BillingPage.css';
 
 const { Title, Text } = Typography;
@@ -29,7 +31,7 @@ export default function BillingPage() {
   const {
     customer, setCustomer,
     billType, setBillType,
-    items, addItem, updateItem, removeItem,
+    items, addItem, updateItem, updateItemFields, removeItem,
     payment, setPaymentAmount, addPaymentMode, removePaymentMode, setDueDate,
     isSubmitting, errors, setErrors,
     totals, balanceDue, paymentStatus,
@@ -51,9 +53,35 @@ export default function BillingPage() {
   const [payModeAmount, setPayModeAmount] = useState(0);
   const [payModeRef, setPayModeRef] = useState('');
 
+  // Unit conversion cache: { [productId]: [{ unit_name, conversion_value }, ...] }
+  const unitConversionsCache = useRef({});
+  const [unitConversions, setUnitConversions] = useState({});
+  // Track default prices per item index for "edited" indicator
+  const [defaultRates, setDefaultRates] = useState({});
+
+  const fetchUnitConversions = useCallback(async (productId) => {
+    if (unitConversionsCache.current[productId]) {
+      return unitConversionsCache.current[productId];
+    }
+    try {
+      const { data } = await getUnitConversions(productId);
+      const conversions = data.data || [];
+      unitConversionsCache.current[productId] = conversions;
+      setUnitConversions(prev => ({ ...prev, [productId]: conversions }));
+      return conversions;
+    } catch {
+      // No conversions available — not an error
+      unitConversionsCache.current[productId] = [];
+      setUnitConversions(prev => ({ ...prev, [productId]: [] }));
+      return [];
+    }
+  }, []);
+
   // Refs for focus management
   const productSearchRef = useRef(null);
   const qtyInputRefs = useRef({});
+  const rateInputRefs = useRef({});
+  const discInputRefs = useRef({});
 
   // ───── Keyboard shortcuts ─────
   useEffect(() => {
@@ -82,6 +110,7 @@ export default function BillingPage() {
           setWalkinName('');
           setPayModeAmount(0);
           setPayModeRef('');
+          setDefaultRates({});
           message.info('Bill cleared');
         }
       }
@@ -109,6 +138,11 @@ export default function BillingPage() {
       return;
     }
     const newIndex = addItem(product);
+    // Track default rate for "edited" indicator
+    const defaultRate = billType === 'wholesale' ? (product.wholesale_price || product.mrp) : product.mrp;
+    setDefaultRates(prev => ({ ...prev, [newIndex]: defaultRate }));
+    // Fetch unit conversions for the product
+    fetchUnitConversions(product.id);
     // Focus qty field of the new item after render
     setTimeout(() => {
       const qtyEl = qtyInputRefs.current[newIndex];
@@ -117,13 +151,36 @@ export default function BillingPage() {
         qtyEl.select();
       }
     }, 50);
-  }, [addItem, items, updateItem]);
+  }, [addItem, items, updateItem, billType, fetchUnitConversions]);
 
-  // ───── Qty field Enter → return focus to ProductSearch ─────
-  const handleQtyKeyDown = (e) => {
-    if (e.key === 'Enter') {
+  // ───── Keyboard flow: Qty → Rate → Disc% → Product Search ─────
+  const focusAndSelect = (el) => {
+    if (!el) return;
+    el.focus();
+    // Antd InputNumber: select the inner input text
+    setTimeout(() => {
+      const input = el?.input || el?.nativeElement?.querySelector?.('input');
+      if (input && input.select) input.select();
+    }, 10);
+  };
+
+  const handleQtyKeyDown = (e, idx) => {
+    if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
-      // Focus back to product search
+      focusAndSelect(rateInputRefs.current[idx]);
+    }
+  };
+
+  const handleRateKeyDown = (e, idx) => {
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      focusAndSelect(discInputRefs.current[idx]);
+    }
+  };
+
+  const handleDiscKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
       const searchInput = document.querySelector('.billing-product-search input');
       if (searchInput) searchInput.focus();
     }
@@ -186,6 +243,7 @@ export default function BillingPage() {
     setPayModeSelected('cash');
     setPayModeAmount(0);
     setPayModeRef('');
+    setDefaultRates({});
     resetBilling();
   };
 
@@ -206,6 +264,33 @@ export default function BillingPage() {
     setPayModeAmount(0);
     setPayModeRef('');
   };
+
+  // ───── Unit conversion change handler ─────
+  const handleUnitChange = useCallback((idx, value, item) => {
+    const baseUnit = item.unit;
+    if (value === baseUnit) {
+      // Revert to base unit
+      updateItemFields(idx, {
+        alt_unit: null,
+        alt_qty: null,
+        base_qty: null,
+        selected_unit: null,
+      });
+    } else {
+      const conversions = unitConversionsCache.current[item.product_id] || [];
+      const conv = conversions.find(c => c.unit_name === value);
+      if (conv) {
+        const altQty = item.qty;
+        const baseQty = parseFloat((altQty * conv.conversion_value).toFixed(4));
+        updateItemFields(idx, {
+          selected_unit: value,
+          alt_unit: value,
+          alt_qty: altQty,
+          base_qty: baseQty,
+        });
+      }
+    }
+  }, [updateItemFields]);
 
   // ───── Stock error display ─────
   const stockErrors = errors.stock;
@@ -243,7 +328,7 @@ export default function BillingPage() {
           min={1}
           value={val}
           onChange={(v) => updateItem(idx, 'qty', v || 1)}
-          onKeyDown={handleQtyKeyDown}
+          onKeyDown={(e) => handleQtyKeyDown(e, idx)}
           onFocus={(e) => e.target.select()}
           size="small"
           style={{ width: '100%' }}
@@ -253,25 +338,67 @@ export default function BillingPage() {
     {
       title: 'Unit',
       dataIndex: 'unit',
-      width: 65,
-      render: (u) => <Text type="secondary">{u}</Text>,
+      width: 100,
+      render: (baseUnit, record, idx) => {
+        const conversions = unitConversions[record.product_id] || [];
+        if (conversions.length === 0) {
+          return <Text type="secondary">{baseUnit}</Text>;
+        }
+        const options = [
+          { label: baseUnit, value: baseUnit },
+          ...conversions.map(c => ({ label: c.unit_name, value: c.unit_name })),
+        ];
+        return (
+          <Select
+            size="small"
+            value={record.selected_unit || baseUnit}
+            options={options}
+            onChange={(val) => handleUnitChange(idx, val, record)}
+            style={{ width: '100%' }}
+            popupMatchSelectWidth={false}
+          />
+        );
+      },
     },
     {
       title: 'Rate',
       dataIndex: 'rate',
-      width: 110,
-      render: (val, _, idx) => (
-        <InputNumber
-          min={0}
-          step={0.5}
-          value={val}
-          onChange={(v) => updateItem(idx, 'rate', v || 0)}
-          onFocus={(e) => e.target.select()}
-          size="small"
-          style={{ width: '100%' }}
-          formatter={(v) => `${v}`}
-        />
-      ),
+      width: 120,
+      render: (val, _, idx) => {
+        const isEdited = defaultRates[idx] !== undefined && val !== defaultRates[idx];
+        return (
+          <div style={{ position: 'relative' }}>
+            <InputNumber
+              ref={(el) => { rateInputRefs.current[idx] = el; }}
+              min={0}
+              step={0.5}
+              value={val}
+              onChange={(v) => updateItem(idx, 'rate', v || 0)}
+              onKeyDown={(e) => handleRateKeyDown(e, idx)}
+              onFocus={(e) => e.target.select()}
+              size="small"
+              style={{ width: '100%' }}
+              formatter={(v) => `${v}`}
+            />
+            {isEdited && (
+              <span
+                title={`Default: ${formatINR(defaultRates[idx])}`}
+                style={{
+                  position: 'absolute',
+                  top: -2,
+                  right: -2,
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: '#faad14',
+                  display: 'inline-block',
+                  zIndex: 1,
+                }}
+              />
+            )}
+          </div>
+        );
+      },
     },
     {
       title: 'Disc%',
@@ -279,10 +406,12 @@ export default function BillingPage() {
       width: 80,
       render: (val, _, idx) => (
         <InputNumber
+          ref={(el) => { discInputRefs.current[idx] = el; }}
           min={0}
           max={100}
           value={val}
           onChange={(v) => updateItem(idx, 'discount_pct', v || 0)}
+          onKeyDown={handleDiscKeyDown}
           onFocus={(e) => e.target.select()}
           size="small"
           style={{ width: '100%' }}
@@ -355,7 +484,7 @@ export default function BillingPage() {
         <span style={shortcutItemStyle}><span style={kbdStyle}>F9</span> Finalize</span>
         <span style={shortcutItemStyle}><span style={kbdStyle}>F4</span> Pay Full</span>
         <span style={shortcutItemStyle}><span style={kbdStyle}>Esc</span> Clear Bill</span>
-        <span style={shortcutItemStyle}><span style={kbdStyle}>Enter</span> Add Item</span>
+        <span style={shortcutItemStyle}><span style={kbdStyle}>Enter</span> Qty→Rate→Disc→Search</span>
         <span style={shortcutItemStyle}><span style={kbdStyle}>Ctrl+P</span> Print Last Invoice</span>
       </div>
 
@@ -717,6 +846,7 @@ export default function BillingPage() {
                       setWalkinName('');
                       setPayModeAmount(0);
                       setPayModeRef('');
+                      setDefaultRates({});
                     },
                   });
                 } else {

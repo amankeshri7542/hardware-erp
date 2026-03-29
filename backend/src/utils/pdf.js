@@ -144,22 +144,21 @@ function buildGstSummary(items) {
  * Generate item rows HTML.
  * NEVER includes purchase_price, cost_price_snapshot, profit_amount, profit_pct, or line_profit.
  */
-function buildItemRows(items) {
+function buildItemRows(items, hasAltQty) {
   return items
     .map(
       (item) => `
     <tr>
       <td>${item.sr_no}</td>
-      <td>${item.product_name || ''}</td>
+      <td class="left">${item.product_name || ''}</td>
       <td>${item.hsn_code || ''}</td>
       <td>${item.quantity}</td>
+      ${hasAltQty ? `<td>${item.alt_qty || ''}</td>` : ''}
       <td>${item.unit || ''}</td>
-      <td>${formatCurrency(item.rate)}</td>
+      <td class="right">${formatCurrency(item.rate)}</td>
       <td>${parseFloat(item.discount_pct) || 0}%</td>
-      <td>${formatCurrency(item.taxable_amount)}</td>
       <td>${parseFloat(item.gst_pct) || 0}%</td>
-      <td>${formatCurrency(item.gst_amount)}</td>
-      <td>${formatCurrency(item.total)}</td>
+      <td class="right">${formatCurrency(item.total)}</td>
     </tr>`
     )
     .join('\n');
@@ -210,8 +209,11 @@ async function generateInvoicePDF(invoiceData, options = {}) {
   // Read the HTML template
   let html = fs.readFileSync(templatePath, 'utf-8');
 
+  // Determine if any item has alt_qty
+  const hasAltQty = !!(invoiceData.has_alt_qty || (invoiceData.items || []).some(i => i.alt_qty));
+
   // Build item rows and GST summary rows
-  const itemRowsHtml = buildItemRows(invoiceData.items || []);
+  const itemRowsHtml = buildItemRows(invoiceData.items || [], hasAltQty);
   const gstSummaryRowsHtml = buildGstSummaryRows(invoiceData.items || []);
 
   // Replace items block
@@ -226,22 +228,41 @@ async function generateInvoicePDF(invoiceData, options = {}) {
     gstSummaryRowsHtml
   );
 
+  // Calculate CGST and SGST (half of total GST each for intra-state)
+  const totalGst = parseFloat(invoiceData.total_gst) || 0;
+  const cgstTotal = totalGst / 2;
+  const sgstTotal = totalGst / 2;
+
+  // Previous balance and total due
+  const prevBalance = parseFloat(invoiceData.prev_balance) || 0;
+  const grandTotalNum = parseFloat(invoiceData.grand_total) || 0;
+  const amountPaidNum = parseFloat(invoiceData.amount_paid) || 0;
+  const totalDue = prevBalance + grandTotalNum - amountPaidNum;
+
   // Process conditional flags (before placeholder replacement)
   html = processConditionalFlags(html, {
+    SHOW_CUSTOMER_PHONE: !!(invoiceData.customer_phone),
     SHOW_CUSTOMER_GSTIN: !!(invoiceData.customer_gstin),
+    SHOW_CUSTOMER_ADDRESS: !!(invoiceData.customer_address),
     SHOW_BALANCE_DUE: parseFloat(invoiceData.balance_due) > 0,
     SHOW_DISCOUNT_ROW: parseFloat(invoiceData.discount_total) > 0,
+    SHOW_PREV_BALANCE: prevBalance > 0,
+    SHOW_PAYMENT_INFO: amountPaidNum > 0,
+    HAS_ALT_QTY: hasAltQty,
   });
+
+  // Map bill_type to display string
+  const billTypeMap = { retail: 'Retail', wholesale: 'Wholesale', quickbill: 'Quick Bill' };
 
   // Map DB column names to template placeholders
   const templateData = {
-    storeName: invoiceData.store_name || '',
+    storeName: invoiceData.store_name || 'UMA ENTERPRISES',
     storeAddress: invoiceData.store_address || '',
     storePhone: invoiceData.store_phone || '',
     storeGstin: invoiceData.store_gstin || '',
     invoiceNo: invoiceData.invoice_no || '',
     date: formatDate(invoiceData.invoice_date),
-    billType: invoiceData.bill_type || 'TAX INVOICE',
+    billType: billTypeMap[invoiceData.bill_type] || invoiceData.bill_type || '',
     billTypeLabel: billTypeLabel(invoiceData.bill_type),
     customerName: invoiceData.customer_name || 'Walk-in Customer',
     customerPhone: invoiceData.customer_phone || '',
@@ -252,10 +273,14 @@ async function generateInvoicePDF(invoiceData, options = {}) {
     discountTotal: formatCurrency(invoiceData.discount_total),
     taxableTotal: formatCurrency(invoiceData.taxable_total),
     totalGst: formatCurrency(invoiceData.total_gst),
+    cgstTotal: formatCurrency(cgstTotal),
+    sgstTotal: formatCurrency(sgstTotal),
     grandTotal: formatCurrency(invoiceData.grand_total),
     grandTotalWords: numberToWords(invoiceData.grand_total),
     amountPaid: formatCurrency(invoiceData.amount_paid),
     balanceDue: formatCurrency(invoiceData.balance_due),
+    prevBalance: formatCurrency(prevBalance),
+    totalDue: formatCurrency(totalDue),
     paymentMode: invoiceData.payment_mode || '',
     paymentStatus: (invoiceData.status || 'unpaid').toUpperCase(),
     dueDate: formatDate(invoiceData.due_date),

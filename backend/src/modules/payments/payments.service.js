@@ -100,6 +100,13 @@ async function recordPayment(data, userId) {
     );
     // Note: the trigger fn_sync_customer_outstanding automatically updates customers.outstanding_balance
 
+    // Fetch the updated outstanding balance from the customer (calculated by trigger)
+    const { rows: custResult } = await client.query(
+      `SELECT outstanding_balance FROM customers WHERE id = $1`,
+      [data.customer_id]
+    );
+    payment.outstanding_balance = parseFloat(custResult[0].outstanding_balance);
+
     await client.query('COMMIT');
     return payment;
   } catch (err) {

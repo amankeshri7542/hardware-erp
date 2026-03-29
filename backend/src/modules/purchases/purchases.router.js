@@ -16,6 +16,8 @@ suppliersRouter.post('/', createSupplierSchema, validate, controller.createSuppl
 suppliersRouter.get('/', controller.listSuppliers);
 suppliersRouter.get('/:id', controller.getSupplier);
 suppliersRouter.put('/:id', updateSupplierSchema, validate, controller.updateSupplier);
+suppliersRouter.get('/:id/products', controller.getSupplierProducts);
+suppliersRouter.get('/:id/debit-notes', controller.getSupplierDebitNotes);
 
 // ─── PURCHASES ROUTER ────────────────────────────────────────────
 const purchasesRouter = express.Router();
@@ -24,5 +26,7 @@ purchasesRouter.use(authenticateJWT);
 purchasesRouter.post('/', createPurchaseSchema, validate, controller.createPurchase);
 purchasesRouter.get('/', controller.listPurchases);
 purchasesRouter.get('/:id', controller.getPurchase);
+purchasesRouter.post('/:id/returns', controller.createPurchaseReturn);
+purchasesRouter.get('/:id/returns', controller.getPurchaseReturns);
 
 module.exports = { suppliersRouter, purchasesRouter };

@@ -16,6 +16,7 @@ import LowStockPage from './pages/Products/LowStockPage';
 
 // Supplier pages
 import SuppliersPage from './pages/Suppliers/SuppliersPage';
+import SupplierDetailPage from './pages/Suppliers/SupplierDetailPage';
 
 // Purchase pages
 import PurchasesPage from './pages/Purchases/PurchasesPage';
@@ -86,6 +87,7 @@ export default function App() {
 
             {/* Suppliers */}
             <Route path="/suppliers" element={<SuppliersPage />} />
+            <Route path="/suppliers/:id" element={<SupplierDetailPage />} />
 
             {/* Purchases */}
             <Route path="/purchases" element={<PurchasesPage />} />

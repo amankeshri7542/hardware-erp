@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db');
-const { getPresignedUrl } = require('../../utils/s3');
+const { getPresignedUrl, uploadInvoicePDF } = require('../../utils/s3');
+const { generateInvoicePDF } = require('../../utils/pdf');
 
 // ─── Pure helpers ────────────────────────────────────────────────────
 
@@ -91,11 +92,25 @@ async function createInvoice(data, userId) {
 
     await client.query('BEGIN');
 
-    // Step 2: Stock validation with FOR UPDATE (locks rows to prevent races)
+    // Step 2: Resolve unit conversions (alt_qty/alt_unit → base_qty)
+    for (const item of totals.items) {
+      if (item.alt_unit && !item.base_qty) {
+        const { rows: convRows } = await client.query(
+          `SELECT conversion_value FROM product_unit_conversions
+           WHERE product_id = $1 AND unit_name = $2`,
+          [item.product_id, item.alt_unit]
+        );
+        if (convRows.length > 0) {
+          item.base_qty = parseFloat((item.alt_qty * parseFloat(convRows[0].conversion_value)).toFixed(4));
+        }
+      }
+    }
+
+    // Step 3: Stock validation with FOR UPDATE (locks rows to prevent races)
     const stockFailures = [];
     for (const item of totals.items) {
       const { rows } = await client.query(
-        'SELECT id, name, current_stock FROM products WHERE id = $1 FOR UPDATE',
+        'SELECT id, name, current_stock, mrp, wholesale_price, purchase_price FROM products WHERE id = $1 FOR UPDATE',
         [item.product_id]
       );
       if (!rows[0]) {
@@ -106,11 +121,14 @@ async function createInvoice(data, userId) {
         });
         continue;
       }
-      if (parseFloat(rows[0].current_stock) < item.qty) {
+      // Store product row for price update check later
+      item._product_row = rows[0];
+      const deductQty = item.base_qty || item.qty;
+      if (parseFloat(rows[0].current_stock) < deductQty) {
         stockFailures.push({
           product_id: item.product_id,
           product_name: rows[0].name,
-          requested: item.qty,
+          requested: deductQty,
           available: parseFloat(rows[0].current_stock),
         });
       }
@@ -145,29 +163,32 @@ async function createInvoice(data, userId) {
     );
     const invoice = invoiceResult.rows[0];
 
-    // Step 4: INSERT invoice_items
+    // Step 4: INSERT invoice_items (with optional unit conversion fields)
     for (const item of totals.items) {
       await client.query(
         `INSERT INTO invoice_items (
           invoice_id, product_id, product_name_snapshot, hsn_snapshot,
           qty, unit, rate, discount_pct, discount_amount,
           taxable_amount, gst_pct, gst_amount, line_total,
-          cost_price_snapshot, line_profit
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+          cost_price_snapshot, line_profit,
+          alt_qty, alt_unit, base_qty
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
         [
           invoice.id, item.product_id, item.product_name_snapshot, item.hsn_snapshot || null,
           item.qty, item.unit, item.rate, item.discount_pct || 0, item.discount_amount,
           item.taxable_amount, item.gst_pct, item.gst_amount, item.line_total,
           item.cost_price_snapshot, item.line_profit,
+          item.alt_qty || null, item.alt_unit || null, item.base_qty || null,
         ]
       );
     }
 
-    // Step 5: Stock deduction + stock_ledger entries
+    // Step 5: Stock deduction + stock_ledger entries (use base_qty if present)
     for (const item of totals.items) {
+      const deductQty = item.base_qty || item.qty;
       const stockResult = await client.query(
         'UPDATE products SET current_stock = current_stock - $1, updated_at = NOW() WHERE id = $2 RETURNING current_stock',
-        [item.qty, item.product_id]
+        [deductQty, item.product_id]
       );
       await client.query(
         `INSERT INTO stock_ledger (
@@ -175,7 +196,7 @@ async function createInvoice(data, userId) {
           qty_in, qty_out, stock_after, notes, created_by
         ) VALUES ($1, $2, 'out', $3, 'invoice', 0, $4, $5, $6, $7)`,
         [
-          item.product_id, data.date, invoice.id, item.qty,
+          item.product_id, data.date, invoice.id, deductQty,
           parseFloat(stockResult.rows[0].current_stock),
           'Sale: invoice ' + invoice.invoice_no, userId,
         ]
@@ -244,14 +265,61 @@ async function createInvoice(data, userId) {
       }
     }
 
+    // Step 8: Price update from billing (update product price if rate differs)
+    for (const item of totals.items) {
+      if (!item._product_row) continue;
+      const productRow = item._product_row;
+      const rate = parseFloat(item.rate);
+      const isWholesale = data.bill_type === 'wholesale';
+      const currentPrice = isWholesale
+        ? parseFloat(productRow.wholesale_price)
+        : parseFloat(productRow.mrp);
+      const priceField = isWholesale ? 'wholesale_price' : 'mrp';
+
+      if (rate !== currentPrice) {
+        // Close previous price history entry
+        await client.query(
+          `UPDATE product_price_history SET effective_to = NOW()
+           WHERE product_id = $1 AND effective_to IS NULL`,
+          [item.product_id]
+        );
+        // Update product price
+        await client.query(
+          `UPDATE products SET ${priceField} = $1, updated_at = NOW() WHERE id = $2`,
+          [rate, item.product_id]
+        );
+        // Insert new price history entry with current prices
+        const newMrp = isWholesale ? parseFloat(productRow.mrp) : rate;
+        const newWholesale = isWholesale ? rate : parseFloat(productRow.wholesale_price);
+        await client.query(
+          `INSERT INTO product_price_history (
+            product_id, effective_from, purchase_price, wholesale_price, mrp, source, changed_by
+          ) VALUES ($1, NOW(), $2, $3, $4, 'billing', $5)`,
+          [
+            item.product_id,
+            parseFloat(productRow.purchase_price) || 0,
+            newWholesale,
+            newMrp,
+            userId,
+          ]
+        );
+      }
+    }
+
     await client.query('COMMIT');
 
-    // Step 8: AFTER COMMIT — dispatch PDF job (failure must never rollback invoice)
+    // Step 9: AFTER COMMIT — dispatch PDF job (failure must never rollback invoice)
     try {
       const { addPdfJob } = require('../../queues/pdfQueue');
       await addPdfJob(invoice.id);
     } catch (pdfErr) {
       console.error('[Invoice] Failed to queue PDF job:', pdfErr.message);
+      // Fallback: generate PDF directly when Redis/BullMQ is unavailable
+      try {
+        await generatePdfDirect(invoice.id);
+      } catch (directErr) {
+        console.error('[Invoice] Direct PDF generation also failed:', directErr.message);
+      }
     }
 
     return {
@@ -325,7 +393,7 @@ async function getInvoiceById(id) {
 /**
  * List invoices with filters and pagination.
  */
-async function listInvoices({ customerId, from, to, status, billType, page = 1, limit = 20 }) {
+async function listInvoices({ customerId, from, to, status, billType, invoiceNo, page = 1, limit = 20 }) {
   const conditions = [];
   const params = [];
   let paramIndex = 1;
@@ -349,6 +417,10 @@ async function listInvoices({ customerId, from, to, status, billType, page = 1, 
   if (billType) {
     conditions.push(`i.bill_type = $${paramIndex++}`);
     params.push(billType);
+  }
+  if (invoiceNo) {
+    conditions.push(`i.invoice_no ILIKE $${paramIndex++}`);
+    params.push(`%${invoiceNo}%`);
   }
 
   const whereClause = conditions.length > 0
@@ -623,6 +695,129 @@ async function processReturn(data, userId) {
   }
 }
 
+/**
+ * Generate PDF directly (fallback when Redis/BullMQ is unavailable).
+ * Same logic as pdfWorker but runs in the API process.
+ */
+async function generatePdfDirect(invoiceId) {
+  console.log(`[Invoice] Direct PDF generation for invoiceId: ${invoiceId}`);
+
+  const invoiceResult = await pool.query(
+    `SELECT
+       i.id, i.invoice_no, i.bill_type, i.date,
+       i.subtotal, i.discount_total, i.taxable_total,
+       i.gst_total, i.grand_total, i.status,
+       i.amount_paid, i.balance_due, i.due_date,
+       i.customer_name_walkin,
+       c.name   AS customer_name,
+       c.phone  AS customer_phone,
+       c.gstin  AS customer_gstin,
+       c.address AS customer_address,
+       c.business_name AS customer_business
+     FROM invoices i
+     LEFT JOIN customers c ON c.id = i.customer_id
+     WHERE i.id = $1`,
+    [invoiceId]
+  );
+
+  if (invoiceResult.rows.length === 0) {
+    throw new Error(`Invoice ${invoiceId} not found`);
+  }
+
+  const invoice = invoiceResult.rows[0];
+
+  // Fetch previous balance from customer_ledger (outstanding before this invoice)
+  let prevBalance = 0;
+  if (invoice.customer_id) {
+    const ledgerResult = await pool.query(
+      `SELECT COALESCE(SUM(cl.debit) - SUM(cl.credit), 0) AS balance
+       FROM customer_ledger cl
+       WHERE cl.customer_id = $1
+         AND cl.created_at < (SELECT created_at FROM invoices WHERE id = $2)`,
+      [invoice.customer_id, invoiceId]
+    );
+    if (ledgerResult.rows.length > 0) {
+      prevBalance = parseFloat(ledgerResult.rows[0].balance) || 0;
+    }
+  }
+
+  // Fetch payment mode for the invoice
+  let paymentMode = '';
+  const paymentResult = await pool.query(
+    `SELECT mode FROM payments WHERE invoice_id = $1 ORDER BY id ASC LIMIT 1`,
+    [invoiceId]
+  );
+  if (paymentResult.rows.length > 0) {
+    paymentMode = paymentResult.rows[0].mode;
+  }
+
+  const itemsResult = await pool.query(
+    `SELECT
+       ii.product_name_snapshot AS product_name,
+       ii.hsn_snapshot AS hsn_code,
+       ii.qty, ii.unit, ii.rate, ii.discount_pct,
+       ii.discount_amount, ii.taxable_amount,
+       ii.gst_pct, ii.gst_amount, ii.line_total,
+       ii.alt_qty, ii.alt_unit
+     FROM invoice_items ii
+     WHERE ii.invoice_id = $1
+     ORDER BY ii.id ASC`,
+    [invoiceId]
+  );
+
+  const hasAltQty = itemsResult.rows.some(row => row.alt_qty != null && parseFloat(row.alt_qty) > 0);
+
+  const items = itemsResult.rows.map((row, idx) => ({
+    sr_no: idx + 1,
+    product_name: row.product_name,
+    hsn_code: row.hsn_code,
+    quantity: row.qty,
+    unit: row.unit,
+    rate: row.rate,
+    discount_pct: row.discount_pct,
+    taxable_amount: row.taxable_amount,
+    gst_pct: row.gst_pct,
+    gst_amount: row.gst_amount,
+    total: row.line_total,
+    alt_qty: row.alt_qty,
+    alt_unit: row.alt_unit,
+  }));
+
+  const customerName = invoice.bill_type === 'quickbill'
+    ? (invoice.customer_name_walkin || 'CASH A/C')
+    : (invoice.customer_name || invoice.customer_name_walkin || 'Walk-in Customer');
+
+  const invoiceData = {
+    ...invoice,
+    invoice_date: invoice.date,
+    total_gst: invoice.gst_total,
+    customer_name: customerName,
+    prev_balance: prevBalance,
+    has_alt_qty: hasAltQty,
+    payment_mode: paymentMode,
+    store_name: process.env.STORE_NAME || 'UMA ENTERPRISES',
+    store_address: process.env.STORE_ADDRESS || '',
+    store_phone: process.env.STORE_PHONE || '',
+    store_gstin: process.env.STORE_GSTIN || '',
+    items,
+  };
+
+  const pdfBuffer = await generateInvoicePDF(invoiceData);
+
+  const invoiceDate = new Date(invoice.date);
+  const year = invoiceDate.getFullYear();
+  const month = invoiceDate.getMonth() + 1;
+  const s3Key = await uploadInvoicePDF(invoice.invoice_no, pdfBuffer, year, month);
+
+  await pool.query(
+    `UPDATE invoices SET pdf_url = $1, pdf_status = 'ready' WHERE id = $2`,
+    [s3Key, invoiceId]
+  );
+
+  console.log(`[Invoice] Direct PDF generated — key: ${s3Key}`);
+  return s3Key;
+}
+
 module.exports = {
   calculateInvoiceTotals,
   determinePaymentStatus,
@@ -632,4 +827,5 @@ module.exports = {
   getPdfStatus,
   getPresignedPdfUrl,
   processReturn,
+  generatePdfDirect,
 };

@@ -77,7 +77,7 @@ async function createProduct(req, res, next) {
  */
 async function updateProduct(req, res, next) {
   try {
-    const product = await productsService.updateProduct(req.params.id, req.body);
+    const product = await productsService.updateProduct(req.params.id, req.body, req.user?.id);
     return res.json({ success: true, data: product });
   } catch (err) {
     next(err);
@@ -145,6 +145,78 @@ async function getLowStock(req, res, next) {
   }
 }
 
+/**
+ * GET /products/:id/price-history
+ */
+async function getPriceHistory(req, res, next) {
+  try {
+    const entries = await productsService.getProductPriceHistory(req.params.id);
+    return res.json({ success: true, data: { entries } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /products/:id/suppliers
+ */
+async function getProductSuppliers(req, res, next) {
+  try {
+    const suppliers = await productsService.getProductSuppliers(req.params.id);
+    return res.json({ success: true, data: { suppliers } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /products/:id/suppliers
+ */
+async function linkProductSupplier(req, res, next) {
+  try {
+    const result = await productsService.linkProductSupplier(req.params.id, req.body);
+    return res.status(201).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /products/:id/unit-conversions
+ */
+async function getUnitConversions(req, res, next) {
+  try {
+    const conversions = await productsService.getUnitConversions(req.params.id);
+    return res.json({ success: true, data: { conversions } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /products/:id/unit-conversions
+ */
+async function createUnitConversion(req, res, next) {
+  try {
+    const conversion = await productsService.createUnitConversion(req.params.id, req.body);
+    return res.status(201).json({ success: true, data: conversion });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /products/unit-conversions/:conversionId
+ */
+async function deleteUnitConversion(req, res, next) {
+  try {
+    await productsService.deleteUnitConversion(req.params.conversionId);
+    return res.json({ success: true, data: { message: 'Unit conversion deleted' } });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   listProducts,
   getProduct,
@@ -153,4 +225,10 @@ module.exports = {
   deleteProduct,
   getStockLedger,
   getLowStock,
+  getPriceHistory,
+  getProductSuppliers,
+  linkProductSupplier,
+  getUnitConversions,
+  createUnitConversion,
+  deleteUnitConversion,
 };

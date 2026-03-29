@@ -22,6 +22,9 @@ router.get('/:id/pdf-status', ctrl.getPdfStatus);
 // Get pre-signed PDF download URL
 router.get('/:id/pdf', ctrl.getPdf);
 
+// Regenerate PDF (manual retry)
+router.post('/:id/regenerate-pdf', ctrl.regeneratePdf);
+
 // Process sales return (credit note)
 router.post('/:id/return', returnInvoiceSchema, validate, ctrl.processReturn);
 

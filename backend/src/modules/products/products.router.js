@@ -91,4 +91,16 @@ router.delete('/:id', controller.deleteProduct);
 // Stock ledger for a product
 router.get('/:id/stock-ledger', controller.getStockLedger);
 
+// Price history for a product
+router.get('/:id/price-history', controller.getPriceHistory);
+
+// Product suppliers
+router.get('/:id/suppliers', controller.getProductSuppliers);
+router.post('/:id/suppliers', controller.linkProductSupplier);
+
+// Unit conversions
+router.get('/:id/unit-conversions', controller.getUnitConversions);
+router.post('/:id/unit-conversions', controller.createUnitConversion);
+router.delete('/unit-conversions/:conversionId', controller.deleteUnitConversion);
+
 module.exports = router;

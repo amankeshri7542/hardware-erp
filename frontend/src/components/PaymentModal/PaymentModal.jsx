@@ -64,7 +64,12 @@ export default function PaymentModal({ customerId, invoiceId, balanceDue, open, 
       };
 
       const { data } = await recordPayment(payload);
-      message.success('Payment recorded successfully');
+      
+      const updatedBalance = data.data.outstanding_balance != null 
+        ? data.data.outstanding_balance 
+        : (balanceDue - amount);
+        
+      message.success(`Payment of ${formatINR(amount)} recorded. Outstanding balance: ${formatINR(updatedBalance)}`);
       onSuccess?.(data.data);
       onClose();
     } catch (err) {

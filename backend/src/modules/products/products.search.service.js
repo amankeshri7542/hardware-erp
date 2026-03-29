@@ -50,14 +50,16 @@ async function getFrequentProducts(limit = 6) {
   const { rows } = await pool.query(
     `SELECT
        p.id, p.name, p.unit, p.mrp, p.wholesale_price,
-       p.current_stock, COUNT(ii.id) AS frequency
+       p.purchase_price, p.current_stock, p.gst_rate, p.hsn_code,
+       COUNT(ii.id) AS frequency
      FROM products p
      JOIN invoice_items ii ON ii.product_id = p.id
      JOIN invoices inv ON inv.id = ii.invoice_id
      WHERE inv.created_at >= NOW() - INTERVAL '30 days'
        AND p.is_active = true
      GROUP BY p.id, p.name, p.unit, p.mrp,
-       p.wholesale_price, p.current_stock
+       p.wholesale_price, p.purchase_price, p.current_stock,
+       p.gst_rate, p.hsn_code
      ORDER BY frequency DESC
      LIMIT $1`,
     [limit],
@@ -66,7 +68,8 @@ async function getFrequentProducts(limit = 6) {
   // Fallback: if no invoice history yet, return top products alphabetically
   if (rows.length === 0) {
     const fallback = await pool.query(
-      `SELECT id, name, unit, mrp, wholesale_price, current_stock
+      `SELECT id, name, unit, mrp, wholesale_price, purchase_price,
+              current_stock, gst_rate, hsn_code
        FROM products WHERE is_active = true
        ORDER BY name ASC
        LIMIT $1`,

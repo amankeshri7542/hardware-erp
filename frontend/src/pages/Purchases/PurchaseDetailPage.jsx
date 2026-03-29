@@ -6,6 +6,7 @@ import {
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { getPurchase } from '../../api/purchases.api';
 import { formatINR, formatDate } from '../../utils/formatCurrency';
+import PurchaseReturnModal from '../../components/PurchaseReturnModal/PurchaseReturnModal';
 
 const { Title } = Typography;
 
@@ -13,12 +14,18 @@ export default function PurchaseDetailPage() {
   const { id } = useParams();
   const [purchase, setPurchase] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
 
-  useEffect(() => {
+  const fetchPurchase = () => {
+    setLoading(true);
     getPurchase(id)
       .then(({ data }) => setPurchase(data.data))
       .catch(() => message.error('Failed to load purchase'))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchPurchase();
   }, [id]);
 
   if (loading) return <div style={{ padding: 48, textAlign: 'center' }}><Spin size="large" /></div>;
@@ -37,7 +44,10 @@ export default function PurchaseDetailPage() {
       <Link to="/purchases"><ArrowLeftOutlined /> Back to Purchases</Link>
 
       <Card style={{ marginTop: 16 }}>
-        <Title level={4} style={{ margin: 0, marginBottom: 16 }}>{purchase.po_number}</Title>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Title level={4} style={{ margin: 0 }}>{purchase.po_number}</Title>
+          <Button type="default" danger onClick={() => setReturnModalOpen(true)}>Return Items</Button>
+        </div>
         <Descriptions column={3} size="small">
           <Descriptions.Item label="Date">{formatDate(purchase.date)}</Descriptions.Item>
           <Descriptions.Item label="Supplier">{purchase.supplier_name}</Descriptions.Item>
@@ -62,6 +72,13 @@ export default function PurchaseDetailPage() {
           )}
         />
       </Card>
+
+      <PurchaseReturnModal
+        open={returnModalOpen}
+        purchase={purchase}
+        onClose={() => setReturnModalOpen(false)}
+        onSuccess={fetchPurchase}
+      />
     </div>
   );
 }

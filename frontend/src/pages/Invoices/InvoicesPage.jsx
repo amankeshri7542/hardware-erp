@@ -51,6 +51,8 @@ export default function InvoicesPage() {
   const [status, setStatus] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [invoiceNoSearch, setInvoiceNoSearch] = useState('');
+  const [debouncedInvoiceNo, setDebouncedInvoiceNo] = useState('');
 
   // Data
   const [invoices, setInvoices] = useState([]);
@@ -64,6 +66,12 @@ export default function InvoicesPage() {
     return () => clearTimeout(timer);
   }, [customerSearch]);
 
+  // Debounce invoice number search — 300ms
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedInvoiceNo(invoiceNoSearch), 300);
+    return () => clearTimeout(timer);
+  }, [invoiceNoSearch]);
+
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
     try {
@@ -74,6 +82,7 @@ export default function InvoicesPage() {
       if (billType) params.bill_type = billType;
       if (status) params.status = status;
       if (debouncedSearch) params.customer_search = debouncedSearch;
+      if (debouncedInvoiceNo) params.invoice_no = debouncedInvoiceNo;
       if (dateRange && dateRange[0] && dateRange[1]) {
         params.date_from = dateRange[0].format('YYYY-MM-DD');
         params.date_to = dateRange[1].format('YYYY-MM-DD');
@@ -91,7 +100,7 @@ export default function InvoicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, billType, status, debouncedSearch, dateRange]);
+  }, [pagination.page, billType, status, debouncedSearch, debouncedInvoiceNo, dateRange]);
 
   useEffect(() => {
     fetchInvoices();
@@ -100,7 +109,7 @@ export default function InvoicesPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setPagination((prev) => ({ ...prev, page: 1 }));
-  }, [billType, status, debouncedSearch, dateRange]);
+  }, [billType, status, debouncedSearch, debouncedInvoiceNo, dateRange]);
 
   const handleDownloadPdf = useCallback(async (invoiceId) => {
     try {
@@ -260,6 +269,16 @@ export default function InvoicesPage() {
       {/* Filters */}
       <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: '12px 16px' }}>
         <Row gutter={[16, 12]} align="middle">
+          <Col>
+            <Input
+              prefix={<SearchOutlined />}
+              placeholder="Invoice No..."
+              value={invoiceNoSearch}
+              onChange={(e) => setInvoiceNoSearch(e.target.value)}
+              allowClear
+              style={{ width: 180 }}
+            />
+          </Col>
           <Col flex="auto">
             <Input
               prefix={<SearchOutlined />}

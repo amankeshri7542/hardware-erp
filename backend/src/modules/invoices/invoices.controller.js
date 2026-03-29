@@ -33,6 +33,7 @@ const listInvoices = asyncHandler(async (req, res) => {
     to,
     status,
     bill_type,
+    invoice_no,
     page = 1,
     limit = 20,
   } = req.query;
@@ -46,6 +47,7 @@ const listInvoices = asyncHandler(async (req, res) => {
     to: to || undefined,
     status: status || undefined,
     billType: bill_type || undefined,
+    invoiceNo: invoice_no || undefined,
     page: parsedPage,
     limit: parsedLimit,
   });
@@ -110,7 +112,25 @@ const getPdf = asyncHandler(async (req, res) => {
     return res.sendFile(filePath);
   }
 
+  // S3: redirect to the pre-signed URL so browser opens the PDF directly
+  if (result.url) {
+    return res.redirect(result.url);
+  }
+
   res.json({ success: true, data: result });
+});
+
+/**
+ * POST /api/invoices/:id/regenerate-pdf
+ */
+const regeneratePdf = asyncHandler(async (req, res) => {
+  const invoiceId = parseInt(req.params.id, 10);
+  try {
+    const s3Key = await invoicesService.generatePdfDirect(invoiceId);
+    res.json({ success: true, data: { pdf_status: 'ready', pdf_url: s3Key } });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'PDF generation failed: ' + err.message });
+  }
 });
 
 /**
@@ -127,5 +147,6 @@ module.exports = {
   getInvoice,
   getPdfStatus,
   getPdf,
+  regeneratePdf,
   processReturn,
 };

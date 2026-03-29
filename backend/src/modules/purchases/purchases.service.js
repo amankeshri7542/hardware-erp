@@ -294,6 +294,169 @@ async function getPurchaseById(id) {
   return { ...purchase, items: itemsResult.rows };
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// SUPPLIER DETAIL: Products & Debit Notes
+// ═══════════════════════════════════════════════════════════════════
+
+async function getSupplierProducts(supplierId) {
+  const { rows } = await pool.query(
+    `SELECT ps.id, ps.product_id, p.name AS product_name, p.sku, p.category,
+            p.unit, p.current_stock, ps.last_price, ps.last_purchase_date,
+            ps.is_primary_supplier
+     FROM product_suppliers ps
+     JOIN products p ON p.id = ps.product_id
+     WHERE ps.supplier_id = $1
+     ORDER BY p.name ASC`,
+    [supplierId],
+  );
+  return rows;
+}
+
+async function getSupplierDebitNotes(supplierId) {
+  const { rows } = await pool.query(
+    `SELECT sdn.id, sdn.debit_note_number, sdn.date, sdn.total_amount,
+            sdn.reason, sdn.status, sdn.purchase_return_id, sdn.created_at
+     FROM supplier_debit_notes sdn
+     WHERE sdn.supplier_id = $1
+     ORDER BY sdn.date DESC, sdn.id DESC`,
+    [supplierId],
+  );
+  return rows;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PURCHASE RETURNS
+// ═══════════════════════════════════════════════════════════════════
+
+async function createPurchaseReturn(purchaseId, data, userId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verify purchase exists
+    const purchaseResult = await client.query(
+      `SELECT p.id, p.supplier_id, s.name AS supplier_name
+       FROM purchases p
+       JOIN suppliers s ON s.id = p.supplier_id
+       WHERE p.id = $1`,
+      [purchaseId],
+    );
+    if (purchaseResult.rows.length === 0) {
+      const error = new Error('Purchase not found');
+      error.statusCode = 404;
+      error.errorCode = 'PURCHASE_NOT_FOUND';
+      throw error;
+    }
+    const purchase = purchaseResult.rows[0];
+
+    // Calculate total return amount
+    const totalAmount = data.items.reduce(
+      (sum, item) => sum + (Number(item.qty_returned) * Number(item.cost_price)),
+      0
+    );
+
+    // Insert purchase return
+    const returnNo = `PR-${Date.now()}`;
+    const returnResult = await client.query(
+      `INSERT INTO purchase_returns (purchase_id, return_no, date, total_amount, reason, created_by)
+       VALUES ($1, $2, NOW(), $3, $4, $5)
+       RETURNING id, return_no, purchase_id, date, total_amount, reason, created_at`,
+      [purchaseId, returnNo, totalAmount, data.reason || null, userId],
+    );
+    const purchaseReturn = returnResult.rows[0];
+
+    // Process each return item
+    for (const item of data.items) {
+      if (Number(item.qty_returned) <= 0) continue;
+
+      // Insert return item
+      await client.query(
+        `INSERT INTO purchase_return_items (purchase_return_id, product_id, qty_returned, cost_price)
+         VALUES ($1, $2, $3, $4)`,
+        [purchaseReturn.id, item.product_id, item.qty_returned, item.cost_price],
+      );
+
+      // Deduct stock
+      const productUpdate = await client.query(
+        `UPDATE products
+         SET current_stock = current_stock - $1, updated_at = NOW()
+         WHERE id = $2
+         RETURNING id, name, current_stock`,
+        [item.qty_returned, item.product_id],
+      );
+
+      if (productUpdate.rows.length === 0) {
+        const error = new Error(`Product ID ${item.product_id} not found`);
+        error.statusCode = 404;
+        error.errorCode = 'PRODUCT_NOT_FOUND';
+        throw error;
+      }
+
+      const updatedProduct = productUpdate.rows[0];
+
+      // Stock ledger entry for return_out
+      await client.query(
+        `INSERT INTO stock_ledger
+         (product_id, date, movement_type, reference_id, reference_type,
+          qty_in, qty_out, stock_after, notes, created_by)
+         VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          item.product_id,
+          'return_out',
+          purchaseReturn.id,
+          'purchase_return',
+          0,
+          item.qty_returned,
+          updatedProduct.current_stock,
+          `Purchase return to supplier: ${purchase.supplier_name}`,
+          userId,
+        ],
+      );
+    }
+
+    // Create debit note
+    const dnNumber = `DN-${Date.now()}`;
+    await client.query(
+      `INSERT INTO supplier_debit_notes
+       (supplier_id, purchase_return_id, debit_note_no, date, total_amount, reason, status)
+       VALUES ($1, $2, $3, NOW(), $4, $5, $6)`,
+      [purchase.supplier_id, purchaseReturn.id, dnNumber, totalAmount, data.reason || null, 'pending'],
+    );
+
+    await client.query('COMMIT');
+    return purchaseReturn;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function getPurchaseReturns(purchaseId) {
+  const { rows } = await pool.query(
+    `SELECT pr.id, pr.purchase_id, pr.date, pr.total_amount, pr.reason, pr.created_at
+     FROM purchase_returns pr
+     WHERE pr.purchase_id = $1
+     ORDER BY pr.date DESC`,
+    [purchaseId],
+  );
+
+  // Get items for each return
+  for (const ret of rows) {
+    const items = await pool.query(
+      `SELECT pri.id, pri.product_id, p.name AS product_name, pri.qty_returned, pri.cost_price
+       FROM purchase_return_items pri
+       JOIN products p ON p.id = pri.product_id
+       WHERE pri.purchase_return_id = $1`,
+      [ret.id],
+    );
+    ret.items = items.rows;
+  }
+
+  return rows;
+}
+
 module.exports = {
   createSupplier,
   getSuppliers,
@@ -302,4 +465,8 @@ module.exports = {
   createPurchaseWithStockIn,
   getPurchases,
   getPurchaseById,
+  getSupplierProducts,
+  getSupplierDebitNotes,
+  createPurchaseReturn,
+  getPurchaseReturns,
 };

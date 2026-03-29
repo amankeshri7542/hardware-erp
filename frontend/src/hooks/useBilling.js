@@ -57,6 +57,19 @@ export function useBilling(initialBillType = 'retail') {
     });
   }, []);
 
+  // Update multiple fields on an item at once (avoids multiple re-renders)
+  const updateItemFields = useCallback((index, fieldsObj) => {
+    setItems(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], ...fieldsObj };
+      if ('discount_pct' in fieldsObj) {
+        updated[index].discount_amount = updated[index].rate * (fieldsObj.discount_pct / 100);
+      }
+      updated[index] = calculateLineItem(updated[index]);
+      return updated;
+    });
+  }, []);
+
   const removeItem = useCallback((index) => {
     setItems(prev => prev.filter((_, i) => i !== index));
   }, []);
@@ -121,13 +134,18 @@ export function useBilling(initialBillType = 'retail') {
           product_id: item.product_id,
           product_name_snapshot: item.product_name_snapshot,
           hsn_snapshot: item.hsn_snapshot,
-          qty: item.qty,
+          qty: item.base_qty || item.qty,
           unit: item.unit,
           rate: item.rate,
           discount_pct: item.discount_pct || 0,
           discount_amount: item.discount_amount || 0,
           gst_pct: item.gst_pct,
           cost_price_snapshot: item.cost_price_snapshot,
+          ...(item.alt_unit ? {
+            alt_qty: item.alt_qty,
+            alt_unit: item.alt_unit,
+            base_qty: item.base_qty,
+          } : {}),
         })),
         payment: {
           amount_paid: payment.amount_paid,
@@ -161,7 +179,7 @@ export function useBilling(initialBillType = 'retail') {
   return {
     customer, setCustomer,
     billType, setBillType,
-    items, addItem, updateItem, removeItem,
+    items, addItem, updateItem, updateItemFields, removeItem,
     payment, setPaymentAmount, addPaymentMode, removePaymentMode, setDueDate,
     isSubmitting, errors, setErrors,
     totals, balanceDue, paymentStatus,

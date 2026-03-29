@@ -107,6 +107,48 @@ async function getPurchase(req, res, next) {
   }
 }
 
+// ─── SUPPLIER DETAIL HANDLERS ────────────────────────────────────
+
+async function getSupplierProducts(req, res, next) {
+  try {
+    const products = await purchasesService.getSupplierProducts(req.params.id);
+    return res.json({ success: true, data: { products } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getSupplierDebitNotes(req, res, next) {
+  try {
+    const debitNotes = await purchasesService.getSupplierDebitNotes(req.params.id);
+    return res.json({ success: true, data: { debit_notes: debitNotes } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── PURCHASE RETURN HANDLERS ───────────────────────────────────
+
+async function createPurchaseReturn(req, res, next) {
+  try {
+    const result = await purchasesService.createPurchaseReturn(
+      req.params.id, req.body, req.user.id
+    );
+    return res.status(201).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getPurchaseReturns(req, res, next) {
+  try {
+    const returns = await purchasesService.getPurchaseReturns(req.params.id);
+    return res.json({ success: true, data: { returns } });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createSupplier,
   listSuppliers,
@@ -115,4 +157,8 @@ module.exports = {
   createPurchase,
   listPurchases,
   getPurchase,
+  getSupplierProducts,
+  getSupplierDebitNotes,
+  createPurchaseReturn,
+  getPurchaseReturns,
 };

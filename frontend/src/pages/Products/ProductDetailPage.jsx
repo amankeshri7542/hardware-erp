@@ -1,11 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
-  Card, Descriptions, Badge, Table, Tag, DatePicker, Select,
-  Spin, Typography, Row, Col, Button, Space, message,
+  Card, Descriptions, Badge, Table, Tag, DatePicker, Select, Tabs,
+  Spin, Typography, Row, Col, Button, Space, message, Modal, Form,
+  InputNumber, Switch,
 } from 'antd';
-import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
-import { getProduct, getStockLedger } from '../../api/products.api';
+import { ArrowLeftOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  getProduct, getStockLedger, getProductPriceHistory,
+  getProductSuppliers, linkProductSupplier,
+} from '../../api/products.api';
+import { getSuppliers } from '../../api/suppliers.api';
 import { formatINR, formatDate } from '../../utils/formatCurrency';
 import ProductFormModal from './ProductFormModal';
 
@@ -30,6 +35,18 @@ export default function ProductDetailPage() {
   const [dateRange, setDateRange] = useState([null, null]);
   const [typeFilter, setTypeFilter] = useState(undefined);
   const [modalOpen, setModalOpen] = useState(false);
+
+  // Price History state
+  const [priceHistory, setPriceHistory] = useState([]);
+  const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
+
+  // Product Suppliers state
+  const [productSuppliers, setProductSuppliers] = useState([]);
+  const [productSuppliersLoading, setProductSuppliersLoading] = useState(false);
+  const [linkSupplierModal, setLinkSupplierModal] = useState(false);
+  const [allSuppliers, setAllSuppliers] = useState([]);
+  const [linkForm] = Form.useForm();
+  const [linkSaving, setLinkSaving] = useState(false);
 
   const fetchProduct = useCallback(async () => {
     setLoading(true);
@@ -67,8 +84,67 @@ export default function ProductDetailPage() {
     }
   }, [id, ledgerPagination.page, ledgerPagination.limit, dateRange, typeFilter]);
 
+  const fetchPriceHistory = useCallback(async () => {
+    setPriceHistoryLoading(true);
+    try {
+      const { data } = await getProductPriceHistory(id);
+      setPriceHistory(data.data.entries);
+    } catch {
+      message.error('Failed to load price history');
+    } finally {
+      setPriceHistoryLoading(false);
+    }
+  }, [id]);
+
+  const fetchProductSuppliers = useCallback(async () => {
+    setProductSuppliersLoading(true);
+    try {
+      const { data } = await getProductSuppliers(id);
+      setProductSuppliers(data.data.suppliers);
+    } catch {
+      message.error('Failed to load product suppliers');
+    } finally {
+      setProductSuppliersLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => { fetchProduct(); }, [fetchProduct]);
   useEffect(() => { fetchLedger(); }, [fetchLedger]);
+
+  const handleTabChange = (key) => {
+    if (key === 'price-history' && priceHistory.length === 0) {
+      fetchPriceHistory();
+    }
+    if (key === 'suppliers' && productSuppliers.length === 0) {
+      fetchProductSuppliers();
+    }
+  };
+
+  const openLinkSupplierModal = async () => {
+    linkForm.resetFields();
+    try {
+      const { data } = await getSuppliers();
+      setAllSuppliers(data.data.suppliers);
+    } catch {
+      message.error('Failed to load suppliers list');
+    }
+    setLinkSupplierModal(true);
+  };
+
+  const handleLinkSupplier = async () => {
+    try {
+      const values = await linkForm.validateFields();
+      setLinkSaving(true);
+      await linkProductSupplier(id, values);
+      message.success('Supplier linked');
+      setLinkSupplierModal(false);
+      fetchProductSuppliers();
+    } catch (err) {
+      if (!err.errorFields) message.error('Failed to link supplier');
+    } finally {
+      setLinkSaving(false);
+    }
+  };
 
   const ledgerColumns = [
     {
@@ -91,6 +167,27 @@ export default function ProductDetailPage() {
     },
     { title: 'Notes', dataIndex: 'notes', key: 'notes', ellipsis: true },
     { title: 'By', dataIndex: 'created_by_name', key: 'created_by_name', width: 100 },
+  ];
+
+  const priceHistoryColumns = [
+    { title: 'Effective From', dataIndex: 'effective_from', key: 'effective_from', width: 130, render: (v) => formatDate(v) },
+    { title: 'Cost Price', dataIndex: 'purchase_price', key: 'purchase_price', width: 120, render: (v) => v != null ? formatINR(v) : '—', align: 'right' },
+    { title: 'Wholesale', dataIndex: 'wholesale_price', key: 'wholesale_price', width: 120, render: (v) => v != null ? formatINR(v) : '—', align: 'right' },
+    { title: 'MRP', dataIndex: 'mrp', key: 'mrp', width: 120, render: (v) => v != null ? formatINR(v) : '—', align: 'right' },
+    { title: 'Source', dataIndex: 'source', key: 'source', width: 120 },
+    { title: 'Changed By', dataIndex: 'changed_by_name', key: 'changed_by_name', width: 120 },
+    { title: 'Date', dataIndex: 'created_at', key: 'created_at', width: 130, render: (v) => formatDate(v) },
+  ];
+
+  const suppliersColumns = [
+    { title: 'Supplier', dataIndex: 'supplier_name', key: 'supplier_name', render: (t) => <strong>{t}</strong> },
+    { title: 'Phone', dataIndex: 'supplier_phone', key: 'supplier_phone', width: 120 },
+    { title: 'Last Price', dataIndex: 'last_price', key: 'last_price', width: 120, render: (v) => v != null ? formatINR(v) : '—', align: 'right' },
+    { title: 'Last Purchase', dataIndex: 'last_purchase_date', key: 'last_purchase_date', width: 130, render: (v) => v ? formatDate(v) : '—' },
+    {
+      title: 'Primary', dataIndex: 'is_primary_supplier', key: 'is_primary_supplier', width: 90,
+      render: (v) => v ? <Tag color="blue">Primary</Tag> : null,
+    },
   ];
 
   if (loading) return <div style={{ padding: 48, textAlign: 'center' }}><Spin size="large" /></div>;
@@ -155,36 +252,111 @@ export default function ProductDetailPage() {
         </Col>
       </Row>
 
-      {/* Stock Ledger */}
-      <Card title="Stock Ledger" style={{ marginTop: 24 }}>
-        <Space style={{ marginBottom: 16 }}>
-          <RangePicker onChange={(dates) => setDateRange(dates || [null, null])} />
-          <Select placeholder="Movement Type" allowClear onChange={setTypeFilter}
-            style={{ width: 150 }}
-            options={[
-              { label: 'Stock In', value: 'in' },
-              { label: 'Stock Out', value: 'out' },
-              { label: 'Return In', value: 'return_in' },
-              { label: 'Return Out', value: 'return_out' },
-              { label: 'Adjustment', value: 'adjustment' },
-            ]}
-          />
-        </Space>
-        <Table
-          dataSource={ledger}
-          columns={ledgerColumns}
-          rowKey="id"
-          loading={ledgerLoading}
-          size="small"
-          pagination={{
-            current: ledgerPagination.page,
-            pageSize: ledgerPagination.limit,
-            total: ledgerPagination.total,
-            onChange: (page, pageSize) =>
-              setLedgerPagination((prev) => ({ ...prev, page, limit: pageSize })),
-          }}
-        />
+      {/* Tabbed section */}
+      <Card style={{ marginTop: 24 }}>
+        <Tabs defaultActiveKey="stock-ledger" onChange={handleTabChange} items={[
+          {
+            key: 'stock-ledger',
+            label: 'Stock Ledger',
+            children: (
+              <>
+                <Space style={{ marginBottom: 16 }}>
+                  <RangePicker onChange={(dates) => setDateRange(dates || [null, null])} />
+                  <Select placeholder="Movement Type" allowClear onChange={setTypeFilter}
+                    style={{ width: 150 }}
+                    options={[
+                      { label: 'Stock In', value: 'in' },
+                      { label: 'Stock Out', value: 'out' },
+                      { label: 'Return In', value: 'return_in' },
+                      { label: 'Return Out', value: 'return_out' },
+                      { label: 'Adjustment', value: 'adjustment' },
+                    ]}
+                  />
+                </Space>
+                <Table
+                  dataSource={ledger}
+                  columns={ledgerColumns}
+                  rowKey="id"
+                  loading={ledgerLoading}
+                  size="small"
+                  pagination={{
+                    current: ledgerPagination.page,
+                    pageSize: ledgerPagination.limit,
+                    total: ledgerPagination.total,
+                    onChange: (page, pageSize) =>
+                      setLedgerPagination((prev) => ({ ...prev, page, limit: pageSize })),
+                  }}
+                />
+              </>
+            ),
+          },
+          {
+            key: 'price-history',
+            label: 'Price History',
+            children: (
+              <Table
+                dataSource={priceHistory}
+                columns={priceHistoryColumns}
+                rowKey="id"
+                loading={priceHistoryLoading}
+                size="small"
+                pagination={{ pageSize: 20 }}
+                locale={{ emptyText: 'No price history records' }}
+              />
+            ),
+          },
+          {
+            key: 'suppliers',
+            label: 'Suppliers',
+            children: (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <Button type="primary" icon={<PlusOutlined />} onClick={openLinkSupplierModal}>
+                    Link Supplier
+                  </Button>
+                </div>
+                <Table
+                  dataSource={productSuppliers}
+                  columns={suppliersColumns}
+                  rowKey="id"
+                  loading={productSuppliersLoading}
+                  size="small"
+                  pagination={false}
+                  locale={{ emptyText: 'No suppliers linked' }}
+                />
+              </>
+            ),
+          },
+        ]} />
       </Card>
+
+      {/* Link Supplier Modal */}
+      <Modal
+        title="Link Supplier to Product"
+        open={linkSupplierModal}
+        onCancel={() => setLinkSupplierModal(false)}
+        onOk={handleLinkSupplier}
+        confirmLoading={linkSaving}
+        destroyOnClose
+      >
+        <Form form={linkForm} layout="vertical" requiredMark="optional">
+          <Form.Item name="supplier_id" label="Supplier"
+            rules={[{ required: true, message: 'Select a supplier' }]}>
+            <Select
+              placeholder="Select supplier"
+              showSearch
+              optionFilterProp="label"
+              options={allSuppliers.map((s) => ({ label: s.name, value: s.id }))}
+            />
+          </Form.Item>
+          <Form.Item name="last_price" label="Price">
+            <InputNumber min={0} precision={2} style={{ width: '100%' }} placeholder="0.00" />
+          </Form.Item>
+          <Form.Item name="is_primary_supplier" label="Primary Supplier" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <ProductFormModal
         open={modalOpen}

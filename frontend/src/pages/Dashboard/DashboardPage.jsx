@@ -119,6 +119,15 @@ export default function DashboardPage() {
       bg: '#fff7e6',
       format: false,
     },
+    {
+      title: 'Supplier Debit Notes',
+      value: summary?.outstanding_debit_notes_total ?? 0,
+      prefix: null,
+      icon: <FileTextOutlined />,
+      color: '#722ed1',
+      bg: '#f9f0ff',
+      format: true,
+    },
   ];
 
   // --- Overdue Table Columns ---
@@ -192,7 +201,7 @@ export default function DashboardPage() {
       {/* Row 1 — Summary Cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         {summaryCards.map((card) => (
-          <Col xs={24} sm={12} lg={6} key={card.title}>
+          <Col xs={24} sm={12} lg={8} xl={6} key={card.title}>
             <Card
               bordered={false}
               style={{ borderRadius: 8, background: card.bg }}
