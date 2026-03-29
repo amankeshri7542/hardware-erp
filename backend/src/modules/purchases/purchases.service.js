@@ -283,7 +283,7 @@ async function getPurchaseById(id) {
 
   const itemsResult = await pool.query(
     `SELECT pi.id, pi.product_id, pi.qty, pi.unit, pi.cost_price, pi.line_total,
-            pr.name AS product_name
+            pr.name AS product_name, pr.current_stock
      FROM purchase_items pi
      JOIN products pr ON pr.id = pi.product_id
      WHERE pi.purchase_id = $1

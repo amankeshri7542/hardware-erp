@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Select, DatePicker, Input, Button, Table, InputNumber,
   Typography, Space, message, Divider,
@@ -18,8 +18,9 @@ const UNIT_OPTIONS = ['piece', 'kg', 'box', 'metre', 'litre', 'set'];
 
 export default function NewPurchasePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [suppliers, setSuppliers] = useState([]);
-  const [supplierId, setSupplierId] = useState(null);
+  const [supplierId, setSupplierId] = useState(location.state?.supplierId || null);
   const [date, setDate] = useState(dayjs());
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState([]);
@@ -30,6 +31,22 @@ export default function NewPurchasePage() {
       .then(({ data }) => setSuppliers(data.data.suppliers))
       .catch(() => {});
   }, []);
+
+  // Handle pre-filled product from state (e.g., from quick restock)
+  useEffect(() => {
+    if (location.state?.product && items.length === 0) {
+      const p = location.state.product;
+      setItems([{
+        key: Date.now(),
+        product_id: p.id,
+        product_name: p.name,
+        qty: 1,
+        unit: p.unit || 'piece',
+        cost_price: p.purchase_price || 0,
+        line_total: p.purchase_price || 0,
+      }]);
+    }
+  }, [location.state]);
 
   const handleProductSelect = (product) => {
     // Check if product already in items

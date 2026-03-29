@@ -37,14 +37,16 @@ export default function CustomerFormModal({ open, onClose, onSuccess, customer }
       // Auto-uppercase GSTIN
       if (values.gstin) values.gstin = values.gstin.toUpperCase();
 
+      let finalCustomerId = isEdit ? customer.id : null;
       if (isEdit) {
         await updateCustomer(customer.id, values);
         message.success('Customer updated');
       } else {
-        await createCustomer(values);
+        const res = await createCustomer(values);
+        finalCustomerId = res.data.id;
         message.success('Customer created');
       }
-      onSuccess();
+      onSuccess({ ...values, id: finalCustomerId });
       onClose();
     } catch (err) {
       if (err.response?.status === 409) {

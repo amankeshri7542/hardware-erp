@@ -265,48 +265,54 @@ async function createInvoice(data, userId) {
       }
     }
 
-    // Step 8: Price update from billing (update product price if rate differs)
-    for (const item of totals.items) {
-      if (!item._product_row) continue;
-      const productRow = item._product_row;
-      const rate = parseFloat(item.rate);
-      const isWholesale = data.bill_type === 'wholesale';
-      const currentPrice = isWholesale
-        ? parseFloat(productRow.wholesale_price)
-        : parseFloat(productRow.mrp);
-      const priceField = isWholesale ? 'wholesale_price' : 'mrp';
-
-      if (rate !== currentPrice) {
-        // Close previous price history entry
-        await client.query(
-          `UPDATE product_price_history SET effective_to = NOW()
-           WHERE product_id = $1 AND effective_to IS NULL`,
-          [item.product_id]
-        );
-        // Update product price
-        await client.query(
-          `UPDATE products SET ${priceField} = $1, updated_at = NOW() WHERE id = $2`,
-          [rate, item.product_id]
-        );
-        // Insert new price history entry with current prices
-        const newMrp = isWholesale ? parseFloat(productRow.mrp) : rate;
-        const newWholesale = isWholesale ? rate : parseFloat(productRow.wholesale_price);
-        await client.query(
-          `INSERT INTO product_price_history (
-            product_id, effective_from, purchase_price, wholesale_price, mrp, source, changed_by
-          ) VALUES ($1, NOW(), $2, $3, $4, 'billing', $5)`,
-          [
-            item.product_id,
-            parseFloat(productRow.purchase_price) || 0,
-            newWholesale,
-            newMrp,
-            userId,
-          ]
-        );
-      }
-    }
+    // Step 8: Price update from billing is removed from here to run AFTER commit
 
     await client.query('COMMIT');
+
+    // Step 8 (Moved here): Price update from billing happens AFTER COMMIT
+    try {
+      for (const item of totals.items) {
+        if (!item._product_row) continue;
+        const productRow = item._product_row;
+        const rate = parseFloat(item.rate);
+        const isWholesale = data.bill_type === 'wholesale';
+        const currentPrice = isWholesale
+          ? parseFloat(productRow.wholesale_price)
+          : parseFloat(productRow.mrp);
+        const priceField = isWholesale ? 'wholesale_price' : 'mrp';
+
+        if (rate !== currentPrice) {
+          // Close previous price history entry
+          await pool.query(
+            `UPDATE product_price_history SET effective_to = NOW()
+             WHERE product_id = $1 AND effective_to IS NULL`,
+            [item.product_id]
+          );
+          // Update product price
+          await pool.query(
+            `UPDATE products SET ${priceField} = $1, updated_at = NOW() WHERE id = $2`,
+            [rate, item.product_id]
+          );
+          // Insert new price history entry with current prices
+          const newMrp = isWholesale ? parseFloat(productRow.mrp) : rate;
+          const newWholesale = isWholesale ? rate : parseFloat(productRow.wholesale_price);
+          await pool.query(
+            `INSERT INTO product_price_history (
+              product_id, effective_from, purchase_price, wholesale_price, mrp, source, changed_by
+            ) VALUES ($1, NOW(), $2, $3, $4, 'billing', $5)`,
+            [
+              item.product_id,
+              parseFloat(productRow.purchase_price) || 0,
+              newWholesale,
+              newMrp,
+              userId,
+            ]
+          );
+        }
+      }
+    } catch (priceErr) {
+      console.error('[Invoice] Failed to update price history after commit:', priceErr.message);
+    }
 
     // Step 9: AFTER COMMIT — dispatch PDF job (failure must never rollback invoice)
     try {

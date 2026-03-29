@@ -118,6 +118,10 @@ export function useBilling(initialBillType = 'retail') {
       setErrors({ customer: 'Customer required for retail/wholesale bills' });
       return null;
     }
+    if (billType === 'quickbill' && !customer && balanceDue > 0) {
+      setErrors({ customer: 'Walk-in customers must pay in full. Select or create a customer to allow dues.' });
+      return null;
+    }
     if (balanceDue > 0 && !payment.due_date && billType !== 'quickbill') {
       setErrors({ due_date: 'Due date required when balance is due' });
       return null;

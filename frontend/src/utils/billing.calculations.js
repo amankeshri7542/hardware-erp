@@ -4,7 +4,9 @@
  */
 export function calculateLineItem(item) {
   const rate = parseFloat(item.rate) || 0;
-  const qty = parseFloat(item.qty) || 0;
+  const displayQty = parseFloat(item.qty) || 0;
+  const baseQty = parseFloat(item.base_qty) || displayQty;
+  const calcQty = baseQty; // use base quantity for all financial math
   const discountPct = parseFloat(item.discount_pct) || 0;
   const gstPct = parseFloat(item.gst_pct) || 0;
   const costPriceSnapshot = parseFloat(item.cost_price_snapshot) || 0;
@@ -16,10 +18,10 @@ export function calculateLineItem(item) {
   }
 
   const effectiveRate = rate - discountAmount;
-  const taxable_amount = parseFloat((effectiveRate * qty).toFixed(2));
+  const taxable_amount = parseFloat((effectiveRate * calcQty).toFixed(2));
   const gst_amount = parseFloat((taxable_amount * (gstPct / 100)).toFixed(2));
   const line_total = parseFloat((taxable_amount + gst_amount).toFixed(2));
-  const line_profit = parseFloat(((effectiveRate - costPriceSnapshot) * qty).toFixed(2));
+  const line_profit = parseFloat(((effectiveRate - costPriceSnapshot) * calcQty).toFixed(2));
 
   return {
     ...item,
@@ -51,9 +53,10 @@ export function calculateInvoiceTotals(items) {
 
   for (const item of items) {
     const rate = parseFloat(item.rate) || 0;
-    const qty = parseFloat(item.qty) || 0;
-    subtotal += rate * qty;
-    discount_total += (parseFloat(item.discount_amount) || 0) * qty;
+    const displayQty = parseFloat(item.qty) || 0;
+    const calcQty = parseFloat(item.base_qty) || displayQty;
+    subtotal += rate * calcQty;
+    discount_total += (parseFloat(item.discount_amount) || 0) * calcQty;
     taxable_total += parseFloat(item.taxable_amount) || 0;
     gst_total += parseFloat(item.gst_amount) || 0;
     total_profit += parseFloat(item.line_profit) || 0;

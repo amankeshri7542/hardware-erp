@@ -91,9 +91,9 @@ export default function ReturnModal({ invoiceId, invoice, open, onClose, onSucce
         .map((item, idx) => ({
           invoice_item_id: item.id,
           product_id: item.product_id,
-          qty: returnQtys[idx] || 0,
+          qty_returned: returnQtys[idx] || 0,
         }))
-        .filter((ri) => ri.qty > 0);
+        .filter((ri) => ri.qty_returned > 0);
 
       const { data } = await processReturn(invoiceId, { items: returnItems });
       message.success('Return processed successfully');

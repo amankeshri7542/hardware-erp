@@ -189,14 +189,10 @@ async function listCustomers({ search, type, city, dues_filter, page = 1, limit 
 
   if (search && search.trim()) {
     const trimmed = search.trim();
-    // If search looks like a phone number (starts with digit), search phone
-    if (/^\d/.test(trimmed)) {
-      conditions.push(`phone LIKE $${idx++} || '%'`);
-      values.push(trimmed);
-    } else {
-      conditions.push(`name % $${idx++}`);
-      values.push(trimmed);
-    }
+    // Use ILIKE '%query%' for substring match everywhere
+    conditions.push(`(phone ILIKE $${idx} OR name ILIKE $${idx} OR business_name ILIKE $${idx})`);
+    values.push(`%${trimmed}%`);
+    idx++;
   }
 
   // Dues filter

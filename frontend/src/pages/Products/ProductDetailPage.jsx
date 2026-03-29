@@ -13,6 +13,7 @@ import {
 import { getSuppliers } from '../../api/suppliers.api';
 import { formatINR, formatDate } from '../../utils/formatCurrency';
 import ProductFormModal from './ProductFormModal';
+import PriceHistoryChart from '../../components/PriceHistoryChart';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -294,15 +295,20 @@ export default function ProductDetailPage() {
             key: 'price-history',
             label: 'Price History',
             children: (
-              <Table
-                dataSource={priceHistory}
-                columns={priceHistoryColumns}
-                rowKey="id"
-                loading={priceHistoryLoading}
-                size="small"
-                pagination={{ pageSize: 20 }}
-                locale={{ emptyText: 'No price history records' }}
-              />
+              <>
+                {!priceHistoryLoading && priceHistory.length >= 2 && (
+                  <PriceHistoryChart data={priceHistory} />
+                )}
+                <Table
+                  dataSource={priceHistory}
+                  columns={priceHistoryColumns}
+                  rowKey="id"
+                  loading={priceHistoryLoading}
+                  size="small"
+                  pagination={{ pageSize: 20 }}
+                  locale={{ emptyText: 'No price history records' }}
+                />
+              </>
             ),
           },
           {

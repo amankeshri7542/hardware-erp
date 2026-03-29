@@ -147,19 +147,23 @@ function buildGstSummary(items) {
 function buildItemRows(items, hasAltQty) {
   return items
     .map(
-      (item) => `
+      (item) => {
+        const qtyString = item.alt_qty && item.alt_unit 
+          ? `${item.alt_qty} ${item.alt_unit} <br><small style="color:#666">(${item.quantity} ${item.unit})</small>`
+          : `${item.quantity} ${item.unit}`;
+        
+        return `
     <tr>
       <td>${item.sr_no}</td>
       <td class="left">${item.product_name || ''}</td>
       <td>${item.hsn_code || ''}</td>
-      <td>${item.quantity}</td>
-      ${hasAltQty ? `<td>${item.alt_qty || ''}</td>` : ''}
-      <td>${item.unit || ''}</td>
+      <td>${qtyString}</td>
       <td class="right">${formatCurrency(item.rate)}</td>
       <td>${parseFloat(item.discount_pct) || 0}%</td>
       <td>${parseFloat(item.gst_pct) || 0}%</td>
       <td class="right">${formatCurrency(item.total)}</td>
-    </tr>`
+    </tr>`;
+      }
     )
     .join('\n');
 }

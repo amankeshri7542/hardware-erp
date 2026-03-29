@@ -73,9 +73,10 @@ export default function PurchaseReturnModal({ open, purchase, onClose, onSuccess
       render: (_, record) => (
         <InputNumber 
           min={0} 
-          max={record.qty} 
+          max={Math.min(record.qty, record.current_stock || record.qty)} 
           value={returnItems[record.product_id]?.qty_returned || 0}
           onChange={(val) => handleQtyChange(record.product_id, val)}
+          style={{ width: '100%' }}
         />
       )
     },

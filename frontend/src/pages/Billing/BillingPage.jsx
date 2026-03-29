@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Button, Input, InputNumber, Radio, Select, Table, Tag, Modal, DatePicker,
   Alert, message, Space, Row, Col, Card, Divider, Typography, Spin,
-  Descriptions,
+  Descriptions, Checkbox,
 } from 'antd';
 import {
   DeleteOutlined, PrinterOutlined, PlusOutlined,
@@ -15,7 +15,9 @@ import CustomerSearch from '../../components/CustomerSearch/CustomerSearch';
 import { useBilling } from '../../hooks/useBilling';
 import { formatINR, formatDate } from '../../utils/formatCurrency';
 import { getPdfStatus } from '../../api/invoices.api';
-import { getUnitConversions } from '../../api/products.api';
+import { getUnitConversions, updateProduct } from '../../api/products.api';
+import ProductFormModal from '../Products/ProductFormModal';
+import CustomerFormModal from '../Customers/CustomerFormModal';
 import './BillingPage.css';
 
 const { Title, Text } = Typography;
@@ -40,6 +42,13 @@ export default function BillingPage() {
 
   // Quick-bill walk-in name
   const [walkinName, setWalkinName] = useState('');
+
+  // Quick-add modals
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+
+  // Auto-save edited prices to Product Master
+  const [autoSavePrices, setAutoSavePrices] = useState(false);
 
   // Post-submission modal
   const [submittedInvoice, setSubmittedInvoice] = useState(null);
@@ -194,6 +203,26 @@ export default function BillingPage() {
 
     const result = await submitInvoice();
     if (result) {
+      // ───── Auto-save changed dynamic prices ─────
+      if (autoSavePrices) {
+        const updates = items.map((item, idx) => {
+          const defaultRate = defaultRates[idx];
+          if (defaultRate !== undefined && item.rate !== defaultRate) {
+            const payload = billType === 'wholesale' 
+              ? { wholesale_price: item.rate } 
+              : { mrp: item.rate };
+            return updateProduct(item.product_id, payload).catch(e => console.error('Failed updating price for', item.product_id, e));
+          }
+          return null;
+        }).filter(Boolean);
+
+        if (updates.length > 0) {
+          Promise.all(updates).then(() => {
+            message.success('Master prices updated according to bill changes.');
+          });
+        }
+      }
+
       message.success(`Invoice ${result.invoice_no || result.invoice_id} created!`);
       setSubmittedInvoice(result);
       setShowSuccessModal(true);
@@ -244,6 +273,7 @@ export default function BillingPage() {
     setPayModeAmount(0);
     setPayModeRef('');
     setDefaultRates({});
+    setAutoSavePrices(false);
     resetBilling();
   };
 
@@ -537,10 +567,19 @@ export default function BillingPage() {
                         </Space>
                       </div>
                     ) : (
-                      <CustomerSearch
-                        onSelect={setCustomer}
-                        autoFocus={true}
-                      />
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ flex: 1 }}>
+                          <CustomerSearch
+                            onSelect={setCustomer}
+                            autoFocus={true}
+                          />
+                        </div>
+                        <Button 
+                          icon={<PlusOutlined />} 
+                          title="Quick Add Customer"
+                          onClick={() => setShowCustomerModal(true)} 
+                        />
+                      </div>
                     )}
                   </>
                 )}
@@ -567,12 +606,21 @@ export default function BillingPage() {
 
           {/* Product search */}
           <Card size="small" className="billing-card billing-product-search">
-            <ProductSearch
-              onSelect={handleProductSelect}
-              billType={billType === 'quickbill' ? 'retail' : billType}
-              autoFocus={billType === 'quickbill'}
-              placeholder="Search product by name, code, or barcode..."
-            />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ flex: 1 }}>
+                <ProductSearch
+                  onSelect={handleProductSelect}
+                  billType={billType === 'quickbill' ? 'retail' : billType}
+                  autoFocus={billType === 'quickbill'}
+                  placeholder="Search product by name, code, or barcode..."
+                />
+              </div>
+              <Button 
+                icon={<PlusOutlined />} 
+                title="Quick Add Product"
+                onClick={() => setShowProductModal(true)} 
+              />
+            </div>
           </Card>
 
           {/* Items table */}
@@ -817,6 +865,16 @@ export default function BillingPage() {
             />
           )}
 
+          {/* Additional Options */}
+          <div style={{ marginBottom: 16 }}>
+            <Checkbox 
+              checked={autoSavePrices} 
+              onChange={(e) => setAutoSavePrices(e.target.checked)}
+            >
+              Automatically save changed rates to Product Master
+            </Checkbox>
+          </div>
+
           {/* Action buttons */}
           <Space direction="vertical" style={{ width: '100%' }} size="small">
             <Button
@@ -847,6 +905,7 @@ export default function BillingPage() {
                       setPayModeAmount(0);
                       setPayModeRef('');
                       setDefaultRates({});
+                      setAutoSavePrices(false);
                     },
                   });
                 } else {
@@ -945,6 +1004,33 @@ export default function BillingPage() {
           </div>
         )}
       </Modal>
+      {/* Quick Add Modals */}
+      <ProductFormModal
+        open={showProductModal}
+        onClose={() => setShowProductModal(false)}
+        onSuccess={(product) => {
+          setShowProductModal(false);
+          // If the product creation returns the product, auto-select it.
+          // Fallback handling may be needed if we need to manually trigger search
+          if (product && product.id) {
+            handleProductSelect(product);
+          } else {
+            message.success('Product created. You can search for it now.');
+          }
+        }}
+      />
+      <CustomerFormModal
+        open={showCustomerModal}
+        onClose={() => setShowCustomerModal(false)}
+        onSuccess={(cust) => {
+          setShowCustomerModal(false);
+          if (cust && cust.id) {
+            setCustomer(cust);
+          } else {
+            message.success('Customer created. You can search for them now.');
+          }
+        }}
+      />
     </div>
   );
 }

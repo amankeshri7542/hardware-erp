@@ -137,7 +137,8 @@ const regeneratePdf = asyncHandler(async (req, res) => {
  * POST /api/invoices/:id/return
  */
 const processReturn = asyncHandler(async (req, res) => {
-  const result = await invoicesService.processReturn(req.body, req.user.id);
+  const data = { ...req.body, original_invoice_id: parseInt(req.params.id, 10) };
+  const result = await invoicesService.processReturn(data, req.user.id);
   res.status(201).json({ success: true, data: result });
 });
 

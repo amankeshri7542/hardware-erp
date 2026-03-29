@@ -1,9 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import {
   Modal, Form, Input, InputNumber, Select, Switch, AutoComplete,
-  message, Spin,
+  message, Spin, Button, Space, Typography,
 } from 'antd';
-import { createProduct, updateProduct, getProduct } from '../../api/products.api';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { 
+  createProduct, updateProduct, getProduct, 
+  getUnitConversions, createUnitConversion, deleteUnitConversion 
+} from '../../api/products.api';
+
+const { Text } = Typography;
 
 const UNIT_OPTIONS = [
   { label: 'Piece', value: 'piece' },
@@ -37,15 +43,20 @@ export default function ProductFormModal({ open, onClose, onSuccess, productId }
   useEffect(() => {
     if (open && productId) {
       setFetching(true);
-      getProduct(productId)
-        .then(({ data }) => {
-          form.setFieldsValue(data.data);
+      Promise.all([
+        getProduct(productId),
+        getUnitConversions(productId).catch(() => ({ data: { data: { conversions: [] } } }))
+      ])
+        .then(([prodRes, convRes]) => {
+          const productData = prodRes.data.data;
+          const conversions = convRes.data.data.conversions || [];
+          form.setFieldsValue({ ...productData, conversions });
         })
         .catch(() => message.error('Failed to load product'))
         .finally(() => setFetching(false));
     } else if (open) {
       form.resetFields();
-      form.setFieldsValue({ unit: 'piece', gst_rate: 18, min_stock: 0, current_stock: 0, is_active: true });
+      form.setFieldsValue({ unit: 'piece', gst_rate: 18, min_stock: 0, current_stock: 0, is_active: true, conversions: [] });
     }
   }, [open, productId, form]);
 
@@ -54,15 +65,34 @@ export default function ProductFormModal({ open, onClose, onSuccess, productId }
       const values = await form.validateFields();
       setLoading(true);
 
+      const { conversions, ...productValues } = values;
+      let finalProductId = productId;
+
       if (isEdit) {
-        await updateProduct(productId, values);
+        await updateProduct(productId, productValues);
         message.success('Product updated');
       } else {
-        await createProduct(values);
+        const res = await createProduct(productValues);
+        finalProductId = res.data.id;
         message.success('Product created');
       }
-      onSuccess();
+
+      // Handle conversions separately
+      if (isEdit) {
+        const oldConv = await getUnitConversions(finalProductId);
+        for (const c of (oldConv.data.data.conversions || [])) {
+          await deleteUnitConversion(c.id).catch(() => {});
+        }
+      }
+      if (conversions && conversions.length > 0) {
+        await Promise.all(
+          conversions.map((conv) => createUnitConversion(finalProductId, conv))
+        );
+      }
+
+      onSuccess({ ...productValues, id: finalProductId });
       onClose();
+
     } catch (err) {
       if (err.response?.status === 409) {
         const errData = err.response.data;
@@ -174,6 +204,43 @@ export default function ProductFormModal({ open, onClose, onSuccess, productId }
               <InputNumber min={0} precision={3} style={{ width: '100%' }}
                 placeholder="0" />
             </Form.Item>
+          </div>
+
+          <div style={{ marginBottom: 24, padding: 16, background: '#fafafa', borderRadius: 8 }}>
+            <Text strong>Unit Conversions (Optional)</Text>
+            <p style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>
+              Define alternate units (e.g., 1 Box = 10 Pieces). Base unit is defined above.
+            </p>
+            <Form.List name="conversions">
+              {(fields, { add, remove }) => (
+                <>
+                  {fields.map(({ key, name, ...restField }) => (
+                    <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'unit_name']}
+                        rules={[{ required: true, message: 'Unit name' }]}
+                      >
+                        <Select options={UNIT_OPTIONS} placeholder="Alt Unit (e.g. Box)" style={{ width: 140 }} />
+                      </Form.Item>
+                      <Text>=</Text>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'conversion_value']}
+                        rules={[{ required: true, message: 'Value' }]}
+                      >
+                        <InputNumber min={0.0001} precision={4} placeholder="Qty" style={{ width: 100 }} />
+                      </Form.Item>
+                      <Text>Base Units</Text>
+                      <DeleteOutlined onClick={() => remove(name)} style={{ color: 'red', marginLeft: 8 }} />
+                    </Space>
+                  ))}
+                  <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                    Add Unit Conversion
+                  </Button>
+                </>
+              )}
+            </Form.List>
           </div>
 
           <Form.Item name="is_active" label="Active" valuePropName="checked">

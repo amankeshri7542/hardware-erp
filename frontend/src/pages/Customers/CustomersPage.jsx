@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Table, Input, Switch, Button, Tag, Space, Popconfirm,
-  message, Spin, Typography, Row, Col, Card, Badge, Segmented,
+  message, Spin, Typography, Row, Col, Card, Badge, Segmented, Select,
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
@@ -193,6 +193,19 @@ export default function CustomersPage() {
             <Input placeholder="City" value={cityFilter}
               onChange={(e) => setCityFilter(e.target.value)}
               allowClear style={{ width: 140 }} />
+          </Col>
+          <Col>
+            <Select
+              value={duesFilter}
+              onChange={setDuesFilter}
+              options={[
+                { label: 'All Balances', value: 'all' },
+                { label: 'With Dues', value: 'outstanding' },
+                { label: 'Settled (Paid)', value: 'paid' },
+                { label: 'Overdue (>30 days)', value: 'overdue' },
+              ]}
+              style={{ width: 130 }}
+            />
           </Col>
           <Col>
             <Space>

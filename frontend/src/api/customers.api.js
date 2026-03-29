@@ -1,6 +1,6 @@
 import api from './axios';
 
-export const searchCustomers = (params) => api.get('/customers', { params });
+export const searchCustomers = (params) => api.get('/customers/search', { params: { q: params.search } });
 export const getCustomer = (id) => api.get(`/customers/${id}`);
 export const getCustomerLedger = (id, params) => api.get(`/customers/${id}/ledger`, { params });
 export const createCustomer = (data) => api.post('/customers', data);
