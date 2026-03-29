@@ -29,6 +29,7 @@ const createInvoice = asyncHandler(async (req, res) => {
 const listInvoices = asyncHandler(async (req, res) => {
   const {
     customer_id,
+    customer_search,
     from,
     to,
     status,
@@ -43,6 +44,7 @@ const listInvoices = asyncHandler(async (req, res) => {
 
   const result = await invoicesService.listInvoices({
     customerId: customer_id ? parseInt(customer_id, 10) : undefined,
+    customerSearch: customer_search || undefined,
     from: from || undefined,
     to: to || undefined,
     status: status || undefined,

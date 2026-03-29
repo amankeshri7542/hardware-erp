@@ -399,7 +399,7 @@ async function getInvoiceById(id) {
 /**
  * List invoices with filters and pagination.
  */
-async function listInvoices({ customerId, from, to, status, billType, invoiceNo, page = 1, limit = 20 }) {
+async function listInvoices({ customerId, customerSearch, from, to, status, billType, invoiceNo, page = 1, limit = 20 }) {
   const conditions = [];
   const params = [];
   let paramIndex = 1;
@@ -407,6 +407,11 @@ async function listInvoices({ customerId, from, to, status, billType, invoiceNo,
   if (customerId) {
     conditions.push(`i.customer_id = $${paramIndex++}`);
     params.push(customerId);
+  }
+  if (customerSearch) {
+    conditions.push(`(c.name ILIKE $${paramIndex} OR c.phone ILIKE $${paramIndex} OR i.customer_name_walkin ILIKE $${paramIndex})`);
+    params.push(`%${customerSearch}%`);
+    paramIndex++;
   }
   if (from) {
     conditions.push(`i.date >= $${paramIndex++}`);
@@ -435,8 +440,9 @@ async function listInvoices({ customerId, from, to, status, billType, invoiceNo,
 
   const offset = (page - 1) * limit;
 
+  const needsCustomerJoin = customerSearch ? 'LEFT JOIN customers c ON c.id = i.customer_id' : '';
   const countResult = await pool.query(
-    `SELECT COUNT(*) AS total FROM invoices i ${whereClause}`,
+    `SELECT COUNT(*) AS total FROM invoices i ${needsCustomerJoin} ${whereClause}`,
     params
   );
   const total = parseInt(countResult.rows[0].total, 10);

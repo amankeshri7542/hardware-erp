@@ -13,7 +13,7 @@ const CUSTOMER_LIST_COLUMNS = `
 `;
 
 const SEARCH_COLUMNS = `
-  id, name, phone, type, gstin, outstanding_balance
+  id, name, phone, type, gstin, outstanding_balance, business_name
 `;
 
 // ─── Allowed fields for dynamic UPDATE ────────────────────────────
