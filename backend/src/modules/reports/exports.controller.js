@@ -57,13 +57,21 @@ async function exportSales(req, res, next) {
 async function exportGst(req, res, next) {
   try {
     const { month, year } = req.query;
-    const m = month || String(new Date().getMonth() + 1);
-    const y = year || String(new Date().getFullYear());
-    const buffer = await buildGstExport({ month: m, year: y });
+    const buffer = await buildGstExport({ month: month || null, year: year || null });
+    // Build filename
+    let fileY, fileM;
+    if (month && String(month).includes('-')) {
+      const parts = String(month).split('-');
+      fileY = parts[0];
+      fileM = parts[1];
+    } else {
+      fileY = year || String(new Date().getFullYear());
+      fileM = String(month || new Date().getMonth() + 1).padStart(2, '0');
+    }
     res.setHeader('Content-Type', XLSX_CONTENT_TYPE);
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="gst-${y}-${String(m).padStart(2, '0')}.xlsx"`
+      `attachment; filename="gst-${fileY}-${fileM}.xlsx"`
     );
     res.send(buffer);
   } catch (err) {

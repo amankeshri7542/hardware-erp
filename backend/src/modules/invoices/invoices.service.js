@@ -714,7 +714,7 @@ async function generatePdfDirect(invoiceId) {
        i.subtotal, i.discount_total, i.taxable_total,
        i.gst_total, i.grand_total, i.status,
        i.amount_paid, i.balance_due, i.due_date,
-       i.customer_name_walkin,
+       i.customer_id, i.customer_name_walkin,
        c.name   AS customer_name,
        c.phone  AS customer_phone,
        c.gstin  AS customer_gstin,

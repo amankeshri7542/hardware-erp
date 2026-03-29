@@ -124,8 +124,17 @@ async function getSalesReport({ from, to, billType, customerId, page = 1, limit 
 
 async function getGstReport({ month, year }) {
   const now = new Date();
-  const y = year ? parseInt(year, 10) : now.getFullYear();
-  const m = month ? parseInt(month, 10) : now.getMonth() + 1;
+  let y, m;
+
+  // Frontend sends month as "YYYY-MM" string
+  if (month && String(month).includes('-')) {
+    const parts = String(month).split('-');
+    y = parseInt(parts[0], 10);
+    m = parseInt(parts[1], 10);
+  } else {
+    y = year ? parseInt(year, 10) : now.getFullYear();
+    m = month ? parseInt(month, 10) : now.getMonth() + 1;
+  }
 
   const fromDate = `${y}-${String(m).padStart(2, '0')}-01`;
   // Last day of month
