@@ -82,8 +82,16 @@ export default function QuickBillPage() {
   }, []);
 
   const handleProductSelect = useCallback((product) => {
-    const idx = billing.addItem(product);
-    setTimeout(() => qtyRefs.current[idx]?.select(), 50);
+    if (!product || !product.id) return;
+    try {
+      const idx = billing.addItem(product);
+      setTimeout(() => {
+        try { qtyRefs.current[idx]?.focus(); } catch (_) { /* ignore */ }
+      }, 100);
+    } catch (err) {
+      console.error('Error adding product:', err);
+      message.error('Failed to add product');
+    }
   }, [billing]);
 
   const handlePaymentModeChange = useCallback((e) => {
@@ -164,7 +172,7 @@ export default function QuickBillPage() {
     },
     {
       title: 'Total',
-      dataIndex: 'net_amount',
+      dataIndex: 'line_total',
       width: 110,
       align: 'right',
       render: (v) => formatINR(v),
@@ -267,7 +275,7 @@ export default function QuickBillPage() {
                     <Table.Summary.Row>
                       <Table.Summary.Cell index={0} colSpan={5} align="right">
                         <Text strong>
-                          {billing.totals.item_count} item(s) | Qty: {billing.totals.total_qty}
+                          {billing.items.length} item(s) | Qty: {billing.items.reduce((s, i) => s + (Number(i.qty) || 0), 0)}
                         </Text>
                       </Table.Summary.Cell>
                       <Table.Summary.Cell index={5} align="right">
@@ -297,15 +305,15 @@ export default function QuickBillPage() {
                 <Text type="secondary">Subtotal</Text>
                 <Text>{formatINR(billing.totals.subtotal)}</Text>
               </Row>
-              {billing.totals.total_discount > 0 && (
+              {billing.totals.discount_total > 0 && (
                 <Row justify="space-between" style={{ marginBottom: 4 }}>
                   <Text type="secondary">Discount</Text>
-                  <Text>-{formatINR(billing.totals.total_discount)}</Text>
+                  <Text>-{formatINR(billing.totals.discount_total)}</Text>
                 </Row>
               )}
               <Row justify="space-between" style={{ marginBottom: 4 }}>
                 <Text type="secondary">GST</Text>
-                <Text>{formatINR(billing.totals.total_gst)}</Text>
+                <Text>{formatINR(billing.totals.gst_total)}</Text>
               </Row>
 
               <Divider style={{ margin: '12px 0' }} />

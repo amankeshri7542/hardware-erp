@@ -26,17 +26,19 @@ export function useBilling(initialBillType = 'retail') {
 
   // Add item from ProductSearch onSelect
   const addItem = useCallback((product) => {
+    const mrp = parseFloat(product.mrp) || 0;
+    const wholesalePrice = parseFloat(product.wholesale_price) || mrp;
     const newItem = {
       product_id: product.id,
-      product_name_snapshot: product.name,
+      product_name_snapshot: product.name || 'Unknown Product',
       hsn_snapshot: product.hsn_code || '',
       qty: 1,
       unit: product.unit || 'piece',
-      rate: billType === 'wholesale' ? (product.wholesale_price || product.mrp) : product.mrp,
+      rate: billType === 'wholesale' ? (wholesalePrice || mrp) : mrp,
       discount_pct: 0,
       discount_amount: 0,
-      gst_pct: product.gst_rate || 0,
-      cost_price_snapshot: product.purchase_price || 0,
+      gst_pct: parseFloat(product.gst_rate) || 0,
+      cost_price_snapshot: parseFloat(product.purchase_price) || 0,
     };
     const computed = calculateLineItem(newItem);
     setItems(prev => [...prev, computed]);

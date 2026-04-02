@@ -139,27 +139,37 @@ export default function BillingPage() {
 
   // ───── Product selected → add item, focus qty ─────
   const handleProductSelect = useCallback((product) => {
-    // Check if product already in items
-    const existingIdx = items.findIndex(i => i.product_id === product.id);
-    if (existingIdx >= 0) {
-      updateItem(existingIdx, 'qty', items[existingIdx].qty + 1);
-      message.info(`${product.name} qty increased to ${items[existingIdx].qty + 1}`);
+    if (!product || !product.id) {
+      message.warning('Invalid product selected');
       return;
     }
-    const newIndex = addItem(product);
-    // Track default rate for "edited" indicator
-    const defaultRate = billType === 'wholesale' ? (product.wholesale_price || product.mrp) : product.mrp;
-    setDefaultRates(prev => ({ ...prev, [newIndex]: defaultRate }));
-    // Fetch unit conversions for the product
-    fetchUnitConversions(product.id);
-    // Focus qty field of the new item after render
-    setTimeout(() => {
-      const qtyEl = qtyInputRefs.current[newIndex];
-      if (qtyEl) {
-        qtyEl.focus();
-        qtyEl.select();
+    try {
+      // Check if product already in items
+      const existingIdx = items.findIndex(i => i.product_id === product.id);
+      if (existingIdx >= 0) {
+        updateItem(existingIdx, 'qty', (items[existingIdx].qty || 0) + 1);
+        message.info(`${product.name} qty increased to ${(items[existingIdx].qty || 0) + 1}`);
+        return;
       }
-    }, 50);
+      const newIndex = addItem(product);
+      // Track default rate for "edited" indicator
+      const defaultRate = billType === 'wholesale'
+        ? (parseFloat(product.wholesale_price) || parseFloat(product.mrp) || 0)
+        : (parseFloat(product.mrp) || 0);
+      setDefaultRates(prev => ({ ...prev, [newIndex]: defaultRate }));
+      // Fetch unit conversions for the product
+      fetchUnitConversions(product.id);
+      // Focus qty field of the new item after render
+      setTimeout(() => {
+        const qtyEl = qtyInputRefs.current[newIndex];
+        if (qtyEl) {
+          try { qtyEl.focus(); } catch (_) { /* ignore focus errors */ }
+        }
+      }, 100);
+    } catch (err) {
+      console.error('Error adding product to bill:', err);
+      message.error('Failed to add product. Please try again.');
+    }
   }, [addItem, items, updateItem, billType, fetchUnitConversions]);
 
   // ───── Keyboard flow: Qty → Rate → Disc% → Product Search ─────
