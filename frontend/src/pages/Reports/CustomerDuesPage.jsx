@@ -62,21 +62,21 @@ export default function CustomerDuesPage() {
   };
 
   const getRowStyle = (record) => {
-    const days = record.days_overdue || 0;
-    if (days > 90) return { background: '#fff2f0' };
-    if (days > 60) return { background: '#fff7e6' };
-    if (days > 30) return { background: '#fffbe6' };
+    const balance = Number(record.outstanding_balance) || 0;
+    if (balance > 50000) return { background: '#fff2f0' };
+    if (balance > 20000) return { background: '#fff7e6' };
+    if (balance > 5000) return { background: '#fffbe6' };
     return {};
   };
 
   const columns = [
     {
       title: 'Customer Name',
-      dataIndex: 'customer_name',
-      key: 'customer_name',
+      dataIndex: 'name',
+      key: 'name',
       ellipsis: true,
       render: (text, record) => (
-        <Button type="link" size="small" onClick={() => navigate(`/customers/${record.customer_id}`)}>
+        <Button type="link" size="small" onClick={() => navigate(`/customers/${record.id}`)}>
           {text}
         </Button>
       ),
@@ -88,8 +88,8 @@ export default function CustomerDuesPage() {
     },
     {
       title: 'Type',
-      dataIndex: 'customer_type',
-      key: 'customer_type',
+      dataIndex: 'type',
+      key: 'type',
       render: (val) => val?.toUpperCase() || '\u2014',
     },
     {
@@ -102,34 +102,22 @@ export default function CustomerDuesPage() {
       defaultSortOrder: 'descend',
     },
     {
-      title: 'Total Invoices',
-      dataIndex: 'total_invoices',
-      key: 'total_invoices',
-      align: 'center',
-    },
-    {
       title: 'Unpaid Invoices',
-      dataIndex: 'unpaid_invoices',
-      key: 'unpaid_invoices',
+      dataIndex: 'unpaid_invoice_count',
+      key: 'unpaid_invoice_count',
       align: 'center',
     },
     {
-      title: 'Days Overdue',
-      dataIndex: 'days_overdue',
-      key: 'days_overdue',
-      align: 'center',
-      render: (val) => {
-        if (!val || val <= 0) return '\u2014';
-        const color = val > 90 ? '#ff4d4f' : val > 60 ? '#fa8c16' : val > 30 ? '#faad14' : '#595959';
-        return <span style={{ color, fontWeight: 600 }}>{val} days</span>;
-      },
-      sorter: (a, b) => (a.days_overdue || 0) - (b.days_overdue || 0),
+      title: 'Oldest Unpaid',
+      dataIndex: 'oldest_unpaid_date',
+      key: 'oldest_unpaid_date',
+      render: (val) => val ? formatDate(val) : '\u2014',
     },
     {
-      title: 'Last Payment',
-      dataIndex: 'last_payment_date',
-      key: 'last_payment_date',
-      render: (val) => formatDate(val),
+      title: 'Last Invoice',
+      dataIndex: 'last_invoice_date',
+      key: 'last_invoice_date',
+      render: (val) => val ? formatDate(val) : '\u2014',
     },
   ];
 
@@ -202,7 +190,7 @@ export default function CustomerDuesPage() {
           <Table
             dataSource={data}
             columns={columns}
-            rowKey={(record) => record.customer_id || record.id}
+            rowKey={(record) => record.id}
             size="small"
             scroll={{ x: 900 }}
             pagination={{ pageSize: 50, showTotal: (total) => `Total ${total} customers` }}

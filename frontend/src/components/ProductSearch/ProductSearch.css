@@ -20,40 +20,6 @@
   overflow-y: auto;
 }
 
-.product-search-frequent {
-  padding: 10px 14px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.frequent-label {
-  font-size: 11px;
-  color: #8c8c8c;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  display: block;
-  margin-bottom: 8px;
-}
-
-.frequent-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.frequent-chip {
-  cursor: pointer;
-  border-radius: 16px;
-  padding: 2px 12px;
-  font-size: 12px;
-  transition: all 0.15s ease;
-}
-
-.frequent-chip:hover {
-  background: #1677ff;
-  color: #fff;
-  border-color: #1677ff;
-}
-
 .product-search-loading {
   display: flex;
   align-items: center;

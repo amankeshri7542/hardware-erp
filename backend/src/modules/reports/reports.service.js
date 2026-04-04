@@ -75,46 +75,17 @@ async function getSalesReport({ from, to, billType, customerId, page = 1, limit 
     pool.query(summaryQuery, filterValues),
   ]);
 
-  const records = recordsResult.rows.map((r) => ({
-    id: int(r.id),
-    invoiceNo: r.invoice_no,
-    date: r.date,
-    billType: r.bill_type,
-    subtotal: num(r.subtotal),
-    discountTotal: num(r.discount_total),
-    taxableTotal: num(r.taxable_total),
-    gstTotal: num(r.gst_total),
-    grandTotal: num(r.grand_total),
-    amountPaid: num(r.amount_paid),
-    balanceDue: num(r.balance_due),
-    status: r.status,
-    profitAmount: num(r.profit_amount),
-    profitPct: num(r.profit_pct),
-    customerName: r.customer_name,
-    customerPhone: r.customer_phone || null,
-  }));
-
+  const invoices = recordsResult.rows;
   const s = summaryResult.rows[0];
   const total = int(s.total_invoices);
-  const summary = {
-    totalInvoices: total,
-    totalSales: num(s.total_sales),
-    totalGst: num(s.total_gst),
-    totalCollected: num(s.total_collected),
-    totalOutstanding: num(s.total_outstanding),
-    totalProfit: num(s.total_profit),
-    avgProfitPct: num(s.avg_profit_pct),
-  };
 
   return {
-    records,
-    summary,
-    pagination: {
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    },
+    invoices,
+    summary: s,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
   };
 }
 
@@ -174,27 +145,7 @@ async function getGstReport({ month, year }) {
     pool.query(rateSummaryQuery, params),
   ]);
 
-  const invoices = invoiceResult.rows.map((r) => ({
-    invoiceNo: r.invoice_no,
-    date: r.date,
-    billType: r.bill_type,
-    customerName: r.customer_name,
-    customerGstin: r.customer_gstin || null,
-    taxableTotal: num(r.taxable_total),
-    gstTotal: num(r.gst_total),
-    grandTotal: num(r.grand_total),
-    invoiceCategory: r.invoice_category,
-  }));
-
-  const rateSummary = rateResult.rows.map((r) => ({
-    gstPct: num(r.gst_pct),
-    taxableAmount: num(r.taxable_amount),
-    cgst: num(r.cgst),
-    sgst: num(r.sgst),
-    totalTax: num(r.total_tax),
-  }));
-
-  return { invoices, rateSummary };
+  return { invoices: invoiceResult.rows, rate_summary: rateResult.rows };
 }
 
 // ---------------------------------------------------------------------------
@@ -232,37 +183,7 @@ async function getStockReport({ category, lowStockOnly }) {
     pool.query(summaryQuery),
   ]);
 
-  const products = productsResult.rows.map((r) => ({
-    id: int(r.id),
-    name: r.name,
-    sku: r.sku,
-    category: r.category,
-    brand: r.brand,
-    unit: r.unit,
-    mrp: num(r.mrp),
-    wholesalePrice: num(r.wholesale_price),
-    purchasePrice: num(r.purchase_price),
-    currentStock: num(r.current_stock),
-    minStock: num(r.min_stock),
-    hsnCode: r.hsn_code,
-    gstRate: num(r.gst_rate),
-    isActive: r.is_active,
-    isLowStock: r.is_low_stock,
-    stockValueCost: num(r.stock_value_cost),
-    stockValueMrp: num(r.stock_value_mrp),
-  }));
-
-  const s = summaryResult.rows[0];
-  const summary = {
-    totalProducts: int(s.total_products),
-    lowStockCount: int(s.low_stock_count),
-    outOfStockCount: int(s.out_of_stock_count),
-    totalStockValueCost: num(s.total_stock_value_cost),
-    totalStockValueMrp: num(s.total_stock_value_mrp),
-    categoryCount: int(s.category_count),
-  };
-
-  return { products, summary };
+  return { products: productsResult.rows, summary: summaryResult.rows[0] };
 }
 
 // ---------------------------------------------------------------------------
@@ -299,7 +220,9 @@ async function getStockMovementReport({
   `;
 
   const countQuery = `
-    SELECT COUNT(*) AS total
+    SELECT COUNT(*) AS total,
+      COALESCE(SUM(sl.qty_in), 0) AS total_in,
+      COALESCE(SUM(sl.qty_out), 0) AS total_out
     FROM stock_ledger sl
     WHERE sl.date >= $1 AND sl.date <= $2
       AND ($3::int IS NULL OR sl.product_id = $3)
@@ -311,26 +234,12 @@ async function getStockMovementReport({
     pool.query(countQuery, filterValues),
   ]);
 
-  const records = recordsResult.rows.map((r) => ({
-    id: int(r.id),
-    date: r.date,
-    movementType: r.movement_type,
-    qtyIn: num(r.qty_in),
-    qtyOut: num(r.qty_out),
-    stockAfter: num(r.stock_after),
-    notes: r.notes,
-    referenceType: r.reference_type,
-    referenceId: r.reference_id ? int(r.reference_id) : null,
-    productName: r.product_name,
-    sku: r.sku,
-    unit: r.unit,
-    createdByName: r.created_by_name || null,
-  }));
-
-  const total = int(countResult.rows[0].total);
+  const summary = countResult.rows[0];
+  const total = int(summary.total);
 
   return {
-    records,
+    movements: recordsResult.rows,
+    summary,
     pagination: {
       total,
       page,
@@ -382,23 +291,10 @@ async function getCustomerDuesReport({
     pool.query(countQuery, [overdueOnly, customerType || null]),
   ]);
 
-  const records = recordsResult.rows.map((r) => ({
-    id: int(r.id),
-    name: r.name,
-    businessName: r.business_name || null,
-    phone: r.phone,
-    type: r.type,
-    outstandingBalance: num(r.outstanding_balance),
-    creditLimit: num(r.credit_limit),
-    unpaidInvoiceCount: int(r.unpaid_invoice_count),
-    lastInvoiceDate: r.last_invoice_date || null,
-    oldestUnpaidDate: r.oldest_unpaid_date || null,
-  }));
-
   const total = int(countResult.rows[0].total);
 
   return {
-    records,
+    customers: recordsResult.rows,
     pagination: {
       total,
       page,
@@ -451,30 +347,11 @@ async function getProfitReport({ from, to, page = 1, limit = 50 }) {
     pool.query(countQuery, params),
   ]);
 
-  const records = recordsResult.rows.map((r) => ({
-    id: int(r.id),
-    invoiceNo: r.invoice_no,
-    date: r.date,
-    billType: r.bill_type,
-    taxableTotal: num(r.taxable_total),
-    totalCost: num(r.total_cost),
-    profitAmount: num(r.profit_amount),
-    profitPct: num(r.profit_pct),
-    grandTotal: num(r.grand_total),
-    customerName: r.customer_name,
-  }));
-
-  const s = summaryResult.rows[0];
   const total = int(countResult.rows[0].total);
 
   return {
-    records,
-    summary: {
-      totalRevenue: num(s.total_revenue),
-      totalCogs: num(s.total_cogs),
-      grossProfit: num(s.gross_profit),
-      avgMarginPct: num(s.avg_margin_pct),
-    },
+    invoices: recordsResult.rows,
+    summary: summaryResult.rows[0],
     pagination: {
       total,
       page,
@@ -509,7 +386,11 @@ async function getPaymentCollectionsReport({ from, to, mode, page = 1, limit = 5
 
   const summaryQuery = `
     SELECT COALESCE(SUM(amount), 0) AS total_collected,
-      COUNT(*) AS total_payments
+      COUNT(*) AS total_payments,
+      COALESCE(SUM(amount) FILTER (WHERE mode = 'cash'), 0) AS cash_total,
+      COALESCE(SUM(amount) FILTER (WHERE mode = 'upi'), 0) AS upi_total,
+      COALESCE(SUM(amount) FILTER (WHERE mode = 'bank'), 0) AS bank_total,
+      COALESCE(SUM(amount) FILTER (WHERE mode = 'cheque'), 0) AS cheque_total
     FROM payments
     WHERE payment_date >= $1 AND payment_date <= $2
       AND ($3::text IS NULL OR mode = $3)
@@ -520,27 +401,12 @@ async function getPaymentCollectionsReport({ from, to, mode, page = 1, limit = 5
     pool.query(summaryQuery, filterValues),
   ]);
 
-  const records = recordsResult.rows.map((r) => ({
-    id: int(r.id),
-    paymentDate: r.payment_date,
-    amount: num(r.amount),
-    mode: r.mode,
-    referenceNo: r.reference_no || null,
-    notes: r.notes || null,
-    customerName: r.customer_name,
-    customerPhone: r.customer_phone || null,
-    invoiceNo: r.invoice_no || null,
-  }));
-
   const s = summaryResult.rows[0];
   const total = int(s.total_payments);
 
   return {
-    records,
-    summary: {
-      totalCollected: num(s.total_collected),
-      totalPayments: total,
-    },
+    payments: recordsResult.rows,
+    summary: s,
     pagination: {
       total,
       page,

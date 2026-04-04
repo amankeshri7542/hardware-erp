@@ -58,6 +58,7 @@ const listInvoices = asyncHandler(async (req, res) => {
     success: true,
     data: {
       invoices: result.invoices,
+      summary: result.summary,
       pagination: {
         total: result.total,
         page: result.page,

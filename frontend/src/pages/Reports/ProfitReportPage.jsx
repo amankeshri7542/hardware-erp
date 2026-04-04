@@ -69,8 +69,8 @@ export default function ProfitReportPage() {
     },
     {
       title: 'Date',
-      dataIndex: 'invoice_date',
-      key: 'invoice_date',
+      dataIndex: 'date',
+      key: 'date',
       render: (val) => formatDate(val),
     },
     {
@@ -129,22 +129,22 @@ export default function ProfitReportPage() {
     <Row gutter={[16, 16]}>
       <Col xs={12} sm={8} lg={6}>
         <Card size="small" bordered={false} style={{ background: '#e6f7ff' }}>
-          <Statistic title="Total Sales" value={summary.total_sales || 0} formatter={(val) => formatINR(val)} />
+          <Statistic title="Total Revenue" value={summary.total_revenue || 0} formatter={(val) => formatINR(val)} />
         </Card>
       </Col>
       <Col xs={12} sm={8} lg={6}>
         <Card size="small" bordered={false} style={{ background: '#fff7e6' }}>
-          <Statistic title="Total Cost" value={summary.total_cost || 0} formatter={(val) => formatINR(val)} />
+          <Statistic title="Cost of Goods" value={summary.total_cogs || 0} formatter={(val) => formatINR(val)} />
         </Card>
       </Col>
       <Col xs={12} sm={8} lg={6}>
-        <Card size="small" bordered={false} style={{ background: (summary.total_profit || 0) >= 0 ? '#f6ffed' : '#fff2f0' }}>
+        <Card size="small" bordered={false} style={{ background: (summary.gross_profit || 0) >= 0 ? '#f6ffed' : '#fff2f0' }}>
           <Statistic
             title="Total Profit"
-            value={summary.total_profit || 0}
+            value={summary.gross_profit || 0}
             formatter={(val) => formatINR(val)}
-            valueStyle={{ color: (summary.total_profit || 0) >= 0 ? '#52c41a' : '#ff4d4f' }}
-            prefix={(summary.total_profit || 0) >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+            valueStyle={{ color: (summary.gross_profit || 0) >= 0 ? '#52c41a' : '#ff4d4f' }}
+            prefix={(summary.gross_profit || 0) >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
           />
         </Card>
       </Col>
@@ -152,10 +152,10 @@ export default function ProfitReportPage() {
         <Card size="small" bordered={false} style={{ background: '#f9f0ff' }}>
           <Statistic
             title="Avg Margin"
-            value={summary.avg_margin || 0}
+            value={summary.avg_margin_pct || 0}
             precision={1}
             suffix="%"
-            valueStyle={{ color: (summary.avg_margin || 0) >= 0 ? '#52c41a' : '#ff4d4f' }}
+            valueStyle={{ color: (summary.avg_margin_pct || 0) >= 0 ? '#52c41a' : '#ff4d4f' }}
           />
         </Card>
       </Col>

@@ -109,8 +109,8 @@ export default function CollectionsReportPage() {
     },
     {
       title: 'Mode',
-      dataIndex: 'payment_mode',
-      key: 'payment_mode',
+      dataIndex: 'mode',
+      key: 'mode',
       render: (val) => (
         <Tag color={MODE_COLORS[val] || 'default'}>
           {val?.toUpperCase()}
@@ -130,12 +130,12 @@ export default function CollectionsReportPage() {
     <Row gutter={[16, 16]}>
       <Col xs={12} sm={8} lg={4}>
         <Card size="small" bordered={false} style={{ background: '#e6f7ff' }}>
-          <Statistic title="Total Collections" value={summary.total_amount || 0} formatter={(val) => formatINR(val)} />
+          <Statistic title="Total Collections" value={summary.total_collected || 0} formatter={(val) => formatINR(val)} />
         </Card>
       </Col>
       <Col xs={12} sm={8} lg={4}>
         <Card size="small" bordered={false} style={{ background: '#f6ffed' }}>
-          <Statistic title="Total Transactions" value={summary.total_count || 0} />
+          <Statistic title="Total Transactions" value={summary.total_payments || 0} />
         </Card>
       </Col>
       <Col xs={12} sm={8} lg={4}>

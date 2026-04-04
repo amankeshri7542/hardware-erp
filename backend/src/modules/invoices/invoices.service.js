@@ -448,12 +448,24 @@ async function listInvoices({ customerId, customerSearch, from, to, status, bill
   );
   const total = parseInt(countResult.rows[0].total, 10);
 
+  // Summary for the filtered set
+  const summaryResult = await pool.query(
+    `SELECT
+      COALESCE(SUM(i.grand_total), 0) AS total_sales,
+      COALESCE(SUM(i.gst_total), 0) AS total_gst,
+      COALESCE(SUM(i.profit_amount), 0) AS total_profit
+    FROM invoices i
+    ${customerSearch ? 'LEFT JOIN customers c ON c.id = i.customer_id' : ''}
+    ${whereClause}`,
+    params
+  );
+
   const dataParams = [...params, limit, offset];
   const invoicesResult = await pool.query(
     `SELECT
       i.id, i.invoice_no, i.customer_id, i.customer_name_walkin,
       i.bill_type, i.date, i.grand_total, i.amount_paid,
-      i.balance_due, i.status, i.pdf_status, i.created_at,
+      i.balance_due, i.status, i.profit_amount, i.pdf_status, i.created_at,
       c.name AS customer_name, c.phone AS customer_phone
     FROM invoices i
     LEFT JOIN customers c ON c.id = i.customer_id
@@ -465,6 +477,7 @@ async function listInvoices({ customerId, customerSearch, from, to, status, bill
 
   return {
     invoices: invoicesResult.rows,
+    summary: summaryResult.rows[0],
     total,
     page,
     limit,
@@ -532,7 +545,7 @@ async function processReturn(data, userId) {
   try {
     // Fetch original invoice
     const origResult = await client.query(
-      `SELECT id, invoice_no, customer_id, bill_type, date, status
+      `SELECT id, invoice_no, customer_id, bill_type, date
        FROM invoices WHERE id = $1`,
       [data.original_invoice_id]
     );
@@ -605,14 +618,16 @@ async function processReturn(data, userId) {
       );
 
       // Calculate return line totals using original item's pricing
+      const origRate = parseFloat(origItem.rate) || 0;
       const discountAmount = parseFloat(origItem.discount_amount) || 0;
-      const taxableAmount = parseFloat(((item.rate - discountAmount) * returnBaseQty).toFixed(2));
+      const taxableAmount = parseFloat(((origRate - discountAmount) * returnBaseQty).toFixed(2));
       const gstAmount = parseFloat((taxableAmount * (parseFloat(origItem.gst_pct) / 100)).toFixed(2));
       const lineTotal = parseFloat((taxableAmount + gstAmount).toFixed(2));
-      const lineProfit = parseFloat(((item.rate - discountAmount - parseFloat(origItem.cost_price_snapshot)) * returnBaseQty).toFixed(2));
+      const lineProfit = parseFloat(((origRate - discountAmount - parseFloat(origItem.cost_price_snapshot)) * returnBaseQty).toFixed(2));
 
       returnItems.push({
         ...item,
+        rate: origRate,
         product_name_snapshot: origItem.product_name_snapshot,
         hsn_snapshot: origItem.hsn_snapshot,
         discount_pct: parseFloat(origItem.discount_pct) || 0,

@@ -130,17 +130,6 @@ async function createProduct(data) {
  */
 async function updateProduct(id, data, userId) {
   const hasStockChange = data.current_stock !== undefined;
-  let oldStock = null;
-
-  // If stock is changing, get old stock first for the ledger entry
-  if (hasStockChange) {
-    const existing = await pool.query(
-      'SELECT current_stock FROM products WHERE id = $1', [id]
-    );
-    if (existing.rows.length > 0) {
-      oldStock = parseFloat(existing.rows[0].current_stock);
-    }
-  }
 
   const fields = [];
   const values = [];
@@ -163,8 +152,25 @@ async function updateProduct(id, data, userId) {
   fields.push(`updated_at = NOW()`);
   values.push(id);
 
+  // Use transaction when stock changes to keep product + ledger in sync
+  const client = hasStockChange ? await pool.connect() : null;
+  const query = client ? client.query.bind(client) : pool.query.bind(pool);
+
   try {
-    const { rows } = await pool.query(
+    if (client) await client.query('BEGIN');
+
+    // Get old stock before update (inside transaction for consistency)
+    let oldStock = null;
+    if (hasStockChange) {
+      const existing = await query(
+        'SELECT current_stock FROM products WHERE id = $1 FOR UPDATE', [id]
+      );
+      if (existing.rows.length > 0) {
+        oldStock = parseFloat(existing.rows[0].current_stock);
+      }
+    }
+
+    const { rows } = await query(
       `UPDATE products
        SET ${fields.join(', ')}
        WHERE id = $${idx}
@@ -184,7 +190,7 @@ async function updateProduct(id, data, userId) {
       const newStock = parseFloat(data.current_stock);
       const diff = newStock - oldStock;
       if (diff !== 0) {
-        await pool.query(
+        await query(
           `INSERT INTO stock_ledger (
             product_id, date, movement_type, reference_id, reference_type,
             qty_in, qty_out, stock_after, notes, created_by
@@ -201,8 +207,12 @@ async function updateProduct(id, data, userId) {
       }
     }
 
+    if (client) await client.query('COMMIT');
     return rows[0];
   } catch (err) {
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+    }
     if (err.code === '23505') {
       if (err.constraint && err.constraint.includes('sku')) {
         const error = new Error('A product with this SKU already exists');
@@ -218,6 +228,8 @@ async function updateProduct(id, data, userId) {
       }
     }
     throw err;
+  } finally {
+    if (client) client.release();
   }
 }
 
@@ -373,10 +385,10 @@ async function createUnitConversion(productId, data) {
   return rows[0];
 }
 
-async function deleteUnitConversion(productId, conversionId) {
+async function deleteUnitConversion(conversionId) {
   const { rowCount } = await pool.query(
-    `DELETE FROM product_unit_conversions WHERE id = $1 AND product_id = $2`,
-    [conversionId, productId],
+    `DELETE FROM product_unit_conversions WHERE id = $1`,
+    [conversionId],
   );
   if (rowCount === 0) {
     const error = new Error('Unit conversion not found');

@@ -90,7 +90,7 @@ export default function StockReportPage() {
       key: 'current_stock',
       align: 'right',
       render: (val, record) => {
-        const isLow = record.is_low_stock || (record.reorder_level && val <= record.reorder_level);
+        const isLow = record.is_low_stock || (record.min_stock && val <= record.min_stock);
         return isLow ? (
           <Badge
             count={<WarningOutlined style={{ color: '#fa8c16', fontSize: 12 }} />}
@@ -104,9 +104,9 @@ export default function StockReportPage() {
       },
     },
     {
-      title: 'Reorder Level',
-      dataIndex: 'reorder_level',
-      key: 'reorder_level',
+      title: 'Min Stock',
+      dataIndex: 'min_stock',
+      key: 'min_stock',
       align: 'right',
       render: (val) => val ?? '\u2014',
     },
@@ -119,8 +119,8 @@ export default function StockReportPage() {
     },
     {
       title: 'Stock Value',
-      dataIndex: 'stock_value',
-      key: 'stock_value',
+      dataIndex: 'stock_value_cost',
+      key: 'stock_value_cost',
       align: 'right',
       render: (val) => formatINR(val),
     },
@@ -145,7 +145,7 @@ export default function StockReportPage() {
       </Col>
       <Col xs={12} sm={8} lg={6}>
         <Card size="small" bordered={false} style={{ background: '#f6ffed' }}>
-          <Statistic title="Total Stock Value" value={summary.total_stock_value || 0} formatter={(val) => formatINR(val)} />
+          <Statistic title="Total Stock Value" value={summary.total_stock_value_cost || 0} formatter={(val) => formatINR(val)} />
         </Card>
       </Col>
     </Row>

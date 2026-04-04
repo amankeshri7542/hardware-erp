@@ -62,8 +62,8 @@ export default function GstReportPage() {
     },
     {
       title: 'Date',
-      dataIndex: 'invoice_date',
-      key: 'invoice_date',
+      dataIndex: 'date',
+      key: 'date',
       render: (val) => formatDate(val),
     },
     {
@@ -81,29 +81,27 @@ export default function GstReportPage() {
     },
     {
       title: 'Taxable Amount',
-      dataIndex: 'taxable_amount',
-      key: 'taxable_amount',
+      dataIndex: 'taxable_total',
+      key: 'taxable_total',
       align: 'right',
       render: (val) => formatINR(val),
     },
     {
       title: 'CGST',
-      dataIndex: 'cgst_amount',
-      key: 'cgst_amount',
+      key: 'cgst',
       align: 'right',
-      render: (val) => formatINR(val),
+      render: (_, record) => formatINR((record.gst_total || 0) / 2),
     },
     {
       title: 'SGST',
-      dataIndex: 'sgst_amount',
-      key: 'sgst_amount',
+      key: 'sgst',
       align: 'right',
-      render: (val) => formatINR(val),
+      render: (_, record) => formatINR((record.gst_total || 0) / 2),
     },
     {
       title: 'Total Tax',
-      dataIndex: 'total_tax',
-      key: 'total_tax',
+      dataIndex: 'gst_total',
+      key: 'gst_total',
       align: 'right',
       render: (val) => formatINR(val),
     },
@@ -119,15 +117,9 @@ export default function GstReportPage() {
   const rateColumns = [
     {
       title: 'GST Rate',
-      dataIndex: 'gst_rate',
-      key: 'gst_rate',
+      dataIndex: 'gst_pct',
+      key: 'gst_pct',
       render: (val) => <Tag color="blue">{val}%</Tag>,
-    },
-    {
-      title: 'Invoice Count',
-      dataIndex: 'invoice_count',
-      key: 'invoice_count',
-      align: 'center',
     },
     {
       title: 'Taxable Amount',
@@ -138,15 +130,15 @@ export default function GstReportPage() {
     },
     {
       title: 'CGST',
-      dataIndex: 'cgst_amount',
-      key: 'cgst_amount',
+      dataIndex: 'cgst',
+      key: 'cgst',
       align: 'right',
       render: (val) => formatINR(val),
     },
     {
       title: 'SGST',
-      dataIndex: 'sgst_amount',
-      key: 'sgst_amount',
+      dataIndex: 'sgst',
+      key: 'sgst',
       align: 'right',
       render: (val) => formatINR(val),
     },
@@ -181,7 +173,7 @@ export default function GstReportPage() {
         <Table
           dataSource={rateSummary}
           columns={rateColumns}
-          rowKey={(record) => record.gst_rate}
+          rowKey={(record) => record.gst_pct}
           size="small"
           pagination={false}
         />

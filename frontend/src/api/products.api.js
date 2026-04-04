@@ -15,8 +15,6 @@ export const getStockLedger = (id, params) =>
 
 export const getLowStockProducts = () => api.get('/products/low-stock');
 
-export const getFrequentProducts = () => api.get('/products/frequent');
-
 export const searchProducts = (params) => api.get('/products/search', { params });
 
 export const getUnitConversions = (id) => api.get(`/products/${id}/unit-conversions`);

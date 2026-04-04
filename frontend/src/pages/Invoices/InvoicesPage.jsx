@@ -175,7 +175,7 @@ export default function InvoicesPage() {
     },
     {
       title: 'Status',
-      dataIndex: 'payment_status',
+      dataIndex: 'status',
       width: 90,
       align: 'center',
       render: (v) => (
@@ -186,7 +186,7 @@ export default function InvoicesPage() {
     },
     {
       title: 'Profit',
-      dataIndex: 'total_profit',
+      dataIndex: 'profit_amount',
       width: 100,
       align: 'right',
       render: (v) => {

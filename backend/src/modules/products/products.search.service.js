@@ -42,43 +42,4 @@ async function searchByBarcode(barcode) {
   return rows[0] || null;
 }
 
-/**
- * Returns top products by frequency in invoice_items over last 30 days.
- * Falls back to alphabetical listing if no invoice history exists.
- */
-async function getFrequentProducts(limit = 6) {
-  const { rows } = await pool.query(
-    `SELECT
-       p.id, p.name, p.unit, p.mrp, p.wholesale_price,
-       p.purchase_price, p.current_stock, p.gst_rate, p.hsn_code,
-       p.base_unit, COUNT(ii.id) AS frequency
-     FROM products p
-     JOIN invoice_items ii ON ii.product_id = p.id
-     JOIN invoices inv ON inv.id = ii.invoice_id
-     WHERE inv.created_at >= NOW() - INTERVAL '30 days'
-       AND p.is_active = true
-     GROUP BY p.id, p.name, p.unit, p.mrp,
-       p.wholesale_price, p.purchase_price, p.current_stock,
-       p.gst_rate, p.hsn_code, p.base_unit
-     ORDER BY frequency DESC
-     LIMIT $1`,
-    [limit],
-  );
-
-  // Fallback: if no invoice history yet, return top products alphabetically
-  if (rows.length === 0) {
-    const fallback = await pool.query(
-      `SELECT id, name, unit, mrp, wholesale_price, purchase_price,
-              current_stock, gst_rate, hsn_code, base_unit
-       FROM products WHERE is_active = true
-       ORDER BY name ASC
-       LIMIT $1`,
-      [limit],
-    );
-    return fallback.rows;
-  }
-
-  return rows;
-}
-
-module.exports = { searchByName, searchByBarcode, getFrequentProducts };
+module.exports = { searchByName, searchByBarcode };

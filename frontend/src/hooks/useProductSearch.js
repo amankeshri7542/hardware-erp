@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { searchProducts, getFrequentProducts } from '../api/products.api';
+import { searchProducts } from '../api/products.api';
 
 /**
  * Custom hook for product search with 150ms debounce.
@@ -9,15 +9,7 @@ export function useProductSearch({ billType = 'retail', limit = 8 } = {}) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [frequentProducts, setFrequentProducts] = useState([]);
   const timerRef = useRef(null);
-
-  // Load frequent products on mount
-  useEffect(() => {
-    getFrequentProducts()
-      .then(({ data }) => setFrequentProducts(Array.isArray(data?.data?.products) ? data.data.products : []))
-      .catch(() => setFrequentProducts([]));
-  }, []);
 
   // 150ms debounced search
   useEffect(() => {
@@ -66,7 +58,6 @@ export function useProductSearch({ billType = 'retail', limit = 8 } = {}) {
     setQuery,
     results,
     isLoading,
-    frequentProducts,
     searchByBarcode,
   };
 }

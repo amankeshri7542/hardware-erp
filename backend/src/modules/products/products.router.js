@@ -39,16 +39,6 @@ router.get('/search', async (req, res, next) => {
   }
 });
 
-// Frequent products for billing chips
-router.get('/frequent', async (req, res, next) => {
-  try {
-    const products = await searchService.getFrequentProducts(6);
-    return res.json({ success: true, data: { products } });
-  } catch (err) {
-    next(err);
-  }
-});
-
 // Low stock products
 router.get('/low-stock', controller.getLowStock);
 

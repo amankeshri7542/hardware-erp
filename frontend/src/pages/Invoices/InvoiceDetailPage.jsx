@@ -99,7 +99,7 @@ export default function InvoiceDetailPage() {
     ((invoice.grand_total || 0) - (invoice.amount_paid || 0)).toFixed(2)
   );
   const showPaymentAction = balanceDue > 0;
-  const isReturnable = invoice.payment_status !== 'returned';
+  const isReturnable = invoice.status !== 'returned';
 
   // Line items columns
   const itemColumns = [
@@ -117,7 +117,7 @@ export default function InvoiceDetailPage() {
       render: (v) => v > 0 ? `${v}%` : '--',
     },
     {
-      title: 'Taxable', dataIndex: 'taxable', width: 110, align: 'right',
+      title: 'Taxable', dataIndex: 'taxable_amount', width: 110, align: 'right',
       render: (v) => formatINR(v),
     },
     { title: 'GST%', dataIndex: 'gst_pct', width: 60, align: 'center' },
@@ -126,7 +126,7 @@ export default function InvoiceDetailPage() {
       render: (v) => formatINR(v),
     },
     {
-      title: 'Net Amount', dataIndex: 'net_amount', width: 120, align: 'right',
+      title: 'Net Amount', dataIndex: 'line_total', width: 120, align: 'right',
       render: (v) => <Text strong>{formatINR(v)}</Text>,
     },
     {
@@ -137,7 +137,7 @@ export default function InvoiceDetailPage() {
       title: 'Profit', width: 100, align: 'right',
       render: (_, record) => {
         const cost = (record.cost_price_snapshot || 0) * (record.qty || 0);
-        const profit = (record.taxable || 0) - cost;
+        const profit = (record.taxable_amount || 0) - cost;
         return (
           <Text style={{ color: profit >= 0 ? '#52c41a' : '#ff4d4f', fontWeight: 600 }}>
             {profit >= 0 ? '+' : ''}{formatINR(profit)}
@@ -149,7 +149,7 @@ export default function InvoiceDetailPage() {
 
   // Payment history columns
   const paymentColumns = [
-    { title: 'Date', dataIndex: 'date', width: 110, render: (v) => formatDate(v) },
+    { title: 'Date', dataIndex: 'payment_date', width: 110, render: (v) => formatDate(v) },
     {
       title: 'Mode', dataIndex: 'mode', width: 120,
       render: (v) => PAYMENT_MODE_LABELS[v] || v,
@@ -167,7 +167,7 @@ export default function InvoiceDetailPage() {
     (sum, item) => sum + ((item.cost_price_snapshot || 0) * (item.qty || 0)),
     0
   );
-  const totalProfit = (invoice.total_taxable || 0) - totalCost;
+  const totalProfit = (invoice.taxable_total || 0) - totalCost;
 
   return (
     <div style={{ padding: 24 }}>
@@ -180,8 +180,8 @@ export default function InvoiceDetailPage() {
             </Button>
             <Title level={3} style={{ margin: 0 }}>{invoice.invoice_no}</Title>
             <Tag color={BILL_TYPE_COLORS[invoice.bill_type]}>{billTypeLabel}</Tag>
-            <Tag color={STATUS_COLORS[invoice.payment_status]}>
-              {invoice.payment_status?.toUpperCase()}
+            <Tag color={STATUS_COLORS[invoice.status]}>
+              {invoice.status?.toUpperCase()}
             </Tag>
           </Space>
         </Col>
@@ -224,8 +224,8 @@ export default function InvoiceDetailPage() {
               <Descriptions.Item label="Date">{formatDate(invoice.date)}</Descriptions.Item>
               <Descriptions.Item label="Bill Type">{billTypeLabel}</Descriptions.Item>
               <Descriptions.Item label="Status">
-                <Tag color={STATUS_COLORS[invoice.payment_status]}>
-                  {invoice.payment_status?.toUpperCase()}
+                <Tag color={STATUS_COLORS[invoice.status]}>
+                  {invoice.status?.toUpperCase()}
                 </Tag>
               </Descriptions.Item>
               {invoice.due_date && (
@@ -236,14 +236,11 @@ export default function InvoiceDetailPage() {
         </Col>
         <Col xs={24} md={12}>
           <Card size="small" title="Customer">
-            {invoice.customer ? (
+            {invoice.customer_id ? (
               <Descriptions column={2} size="small">
-                <Descriptions.Item label="Name">{invoice.customer.name}</Descriptions.Item>
-                <Descriptions.Item label="Phone">{invoice.customer.phone || '--'}</Descriptions.Item>
-                <Descriptions.Item label="Type">
-                  <Tag>{invoice.customer.type || '--'}</Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="GSTIN">{invoice.customer.gstin || '--'}</Descriptions.Item>
+                <Descriptions.Item label="Name">{invoice.customer_name || '--'}</Descriptions.Item>
+                <Descriptions.Item label="Phone">{invoice.customer_phone || '--'}</Descriptions.Item>
+                <Descriptions.Item label="GSTIN">{invoice.customer_gstin || '--'}</Descriptions.Item>
               </Descriptions>
             ) : (
               <div>
@@ -279,29 +276,29 @@ export default function InvoiceDetailPage() {
               <Text type="secondary">Subtotal</Text>
               <Text>{formatINR(invoice.subtotal)}</Text>
             </Row>
-            {invoice.total_discount > 0 && (
+            {invoice.discount_total > 0 && (
               <Row justify="space-between" style={{ marginBottom: 4 }}>
                 <Text type="secondary">Discount</Text>
-                <Text>-{formatINR(invoice.total_discount)}</Text>
+                <Text>-{formatINR(invoice.discount_total)}</Text>
               </Row>
             )}
             <Row justify="space-between" style={{ marginBottom: 4 }}>
               <Text type="secondary">Taxable Amount</Text>
-              <Text>{formatINR(invoice.total_taxable)}</Text>
+              <Text>{formatINR(invoice.taxable_total)}</Text>
             </Row>
             <Divider style={{ margin: '8px 0' }} />
             {/* GST breakdown */}
             <Row justify="space-between" style={{ marginBottom: 4 }}>
               <Text type="secondary">CGST</Text>
-              <Text>{formatINR((invoice.total_gst || 0) / 2)}</Text>
+              <Text>{formatINR((invoice.gst_total || 0) / 2)}</Text>
             </Row>
             <Row justify="space-between" style={{ marginBottom: 4 }}>
               <Text type="secondary">SGST</Text>
-              <Text>{formatINR((invoice.total_gst || 0) / 2)}</Text>
+              <Text>{formatINR((invoice.gst_total || 0) / 2)}</Text>
             </Row>
             <Row justify="space-between" style={{ marginBottom: 4 }}>
               <Text type="secondary">Total GST</Text>
-              <Text>{formatINR(invoice.total_gst)}</Text>
+              <Text>{formatINR(invoice.gst_total)}</Text>
             </Row>
             <Divider style={{ margin: '8px 0' }} />
             <Row justify="space-between">
@@ -334,7 +331,7 @@ export default function InvoiceDetailPage() {
             <Title level={5} style={{ marginBottom: 8 }}>Profit</Title>
             <Row justify="space-between" style={{ marginBottom: 4 }}>
               <Text type="secondary">Revenue (Taxable)</Text>
-              <Text>{formatINR(invoice.total_taxable)}</Text>
+              <Text>{formatINR(invoice.taxable_total)}</Text>
             </Row>
             <Row justify="space-between" style={{ marginBottom: 4 }}>
               <Text type="secondary">Cost of Goods</Text>

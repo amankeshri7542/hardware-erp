@@ -111,7 +111,7 @@ async function buildSalesExport({ from, to, billType, customerId }) {
     limit: 999999,
   });
 
-  const rows = result.records || result.data || [];
+  const rows = result.invoices || result.records || [];
   const summary = result.summary || {};
 
   const workbook = new ExcelJS.Workbook();
@@ -391,7 +391,7 @@ async function buildStockMovementExport({ from, to, productId, movementType }) {
     limit: 999999,
   });
 
-  const rows = result.records || result.data || [];
+  const rows = result.movements || result.records || [];
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Hardware Store ERP';
@@ -447,7 +447,7 @@ async function buildCustomerDuesExport({ overdueOnly, customerType }) {
     limit: 999999,
   });
 
-  const rows = result.records || result.data || [];
+  const rows = result.customers || result.records || [];
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Hardware Store ERP';
@@ -527,7 +527,7 @@ async function buildProfitExport({ from, to }) {
     limit: 999999,
   });
 
-  const rows = result.records || result.data || [];
+  const rows = result.invoices || result.records || [];
   const summary = result.summary || {};
 
   const workbook = new ExcelJS.Workbook();
@@ -609,7 +609,7 @@ async function buildCollectionsExport({ from, to, mode }) {
     limit: 999999,
   });
 
-  const rows = result.records || result.data || [];
+  const rows = result.payments || result.records || [];
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Hardware Store ERP';

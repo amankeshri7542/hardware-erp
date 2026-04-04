@@ -101,8 +101,8 @@ export default function SalesReportPage() {
     },
     {
       title: 'Date',
-      dataIndex: 'invoice_date',
-      key: 'invoice_date',
+      dataIndex: 'date',
+      key: 'date',
       render: (val) => formatDate(val),
     },
     {
@@ -136,8 +136,8 @@ export default function SalesReportPage() {
     },
     {
       title: 'Status',
-      dataIndex: 'payment_status',
-      key: 'payment_status',
+      dataIndex: 'status',
+      key: 'status',
       render: (val) => (
         <Tag color={STATUS_COLORS[val] || 'default'}>{val?.toUpperCase()}</Tag>
       ),
@@ -158,7 +158,7 @@ export default function SalesReportPage() {
       </Col>
       <Col xs={12} sm={8} lg={4}>
         <Card size="small" bordered={false} style={{ background: '#fff7e6' }}>
-          <Statistic title="Total Tax" value={summary.total_tax || 0} formatter={(val) => formatINR(val)} />
+          <Statistic title="Total GST" value={summary.total_gst || 0} formatter={(val) => formatINR(val)} />
         </Card>
       </Col>
       <Col xs={12} sm={8} lg={4}>
@@ -168,12 +168,12 @@ export default function SalesReportPage() {
       </Col>
       <Col xs={12} sm={8} lg={4}>
         <Card size="small" bordered={false} style={{ background: '#fff2f0' }}>
-          <Statistic title="Total Due" value={summary.total_due || 0} formatter={(val) => formatINR(val)} />
+          <Statistic title="Total Outstanding" value={summary.total_outstanding || 0} formatter={(val) => formatINR(val)} />
         </Card>
       </Col>
       <Col xs={12} sm={8} lg={4}>
         <Card size="small" bordered={false} style={{ background: '#e6fffb' }}>
-          <Statistic title="Avg Invoice" value={summary.avg_invoice || 0} formatter={(val) => formatINR(val)} />
+          <Statistic title="Avg Profit %" value={summary.avg_profit_pct || 0} suffix="%" precision={1} />
         </Card>
       </Col>
     </Row>

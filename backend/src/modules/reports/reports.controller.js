@@ -2,12 +2,12 @@ const asyncHandler = require('../../utils/asyncHandler');
 const reportsService = require('./reports.service');
 
 const getSalesReport = asyncHandler(async (req, res) => {
-  const { from, to, billType, customerId, page, limit } = req.query;
+  const { from, to, bill_type, customer_id, page, limit } = req.query;
   const data = await reportsService.getSalesReport({
     from,
     to,
-    billType: billType || null,
-    customerId: customerId ? parseInt(customerId, 10) : null,
+    billType: bill_type || null,
+    customerId: customer_id ? parseInt(customer_id, 10) : null,
     page: Math.max(1, parseInt(page, 10) || 1),
     limit: Math.min(100, Math.max(1, parseInt(limit, 10) || 50)),
   });
