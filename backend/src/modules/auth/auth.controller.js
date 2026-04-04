@@ -79,7 +79,13 @@ async function refreshToken(req, res, next) {
 
     const { accessToken } = authService.generateTokens(rows[0]);
 
-    return res.json({ success: true, data: { accessToken } });
+    return res.json({ 
+      success: true, 
+      data: { 
+        accessToken,
+        user: { id: rows[0].id, name: rows[0].name, role: rows[0].role }
+      } 
+    });
   } catch (err) {
     next(err);
   }

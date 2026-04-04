@@ -4,7 +4,7 @@ import { Button, Result } from 'antd';
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, errorInfo: null };
   }
 
   static getDerivedStateFromError(error) {
@@ -13,6 +13,7 @@ export default class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('ErrorBoundary caught:', error, errorInfo);
+    this.setState({ errorInfo });
   }
 
   render() {
@@ -21,15 +22,26 @@ export default class ErrorBoundary extends React.Component {
         <Result
           status="error"
           title="Something went wrong"
-          subTitle={this.state.error?.message || 'An unexpected error occurred'}
-          extra={
-            <Button type="primary" onClick={() => {
-              this.setState({ hasError: false, error: null });
-              window.location.reload();
-            }}>
-              Reload Page
-            </Button>
+          subTitle={
+            import.meta.env.DEV
+              ? this.state.error?.message
+              : 'Please refresh the page and try again.'
           }
+          extra={[
+            <Button
+              type="primary"
+              key="reload"
+              onClick={() => window.location.reload()}
+            >
+              Reload Page
+            </Button>,
+            <Button
+              key="reset"
+              onClick={() => this.setState({ hasError: false, error: null, errorInfo: null })}
+            >
+              Try Again
+            </Button>,
+          ]}
         />
       );
     }

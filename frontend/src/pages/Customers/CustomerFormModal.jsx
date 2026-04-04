@@ -73,8 +73,9 @@ export default function CustomerFormModal({ open, onClose, onSuccess, customer }
       onCancel={onClose}
       onOk={handleSubmit}
       confirmLoading={loading}
-      width={680}
-      destroyOnClose
+      width={500}
+      destroyOnClose={false}
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" requiredMark="optional">
         <Form.Item name="name" label="Name"

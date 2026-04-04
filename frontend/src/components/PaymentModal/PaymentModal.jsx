@@ -88,7 +88,7 @@ export default function PaymentModal({ customerId, invoiceId, balanceDue, open, 
       onOk={handleSubmit}
       okText="Record Payment"
       okButtonProps={{ disabled: submitting || !amount, loading: submitting }}
-      width={480}
+      confirmLoading={submitting}
       destroyOnClose
     >
       {error && (

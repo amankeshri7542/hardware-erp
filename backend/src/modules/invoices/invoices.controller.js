@@ -114,12 +114,12 @@ const getPdf = asyncHandler(async (req, res) => {
     return res.sendFile(filePath);
   }
 
-  // S3: redirect to the pre-signed URL so browser opens the PDF directly
+  // S3: return pre-signed URL as JSON (frontend opens it directly — avoids CORS issues)
   if (result.url) {
-    return res.redirect(result.url);
+    return res.json({ success: true, data: { url: result.url } });
   }
 
-  res.json({ success: true, data: result });
+  res.status(404).json({ success: false, error: 'PDF not available', code: 'PDF_NOT_READY' });
 });
 
 /**

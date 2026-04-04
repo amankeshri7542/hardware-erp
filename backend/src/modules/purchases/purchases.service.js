@@ -314,11 +314,11 @@ async function getSupplierProducts(supplierId) {
 
 async function getSupplierDebitNotes(supplierId) {
   const { rows } = await pool.query(
-    `SELECT sdn.id, sdn.debit_note_number, sdn.date, sdn.total_amount,
-            sdn.reason, sdn.status, sdn.purchase_return_id, sdn.created_at
+    `SELECT sdn.id, sdn.debit_note_no AS debit_note_number, sdn.created_at AS date, sdn.amount AS total_amount,
+            sdn.notes AS reason, sdn.status, sdn.purchase_return_id, sdn.created_at
      FROM supplier_debit_notes sdn
      WHERE sdn.supplier_id = $1
-     ORDER BY sdn.date DESC, sdn.id DESC`,
+     ORDER BY sdn.created_at DESC, sdn.id DESC`,
     [supplierId],
   );
   return rows;
@@ -356,12 +356,15 @@ async function createPurchaseReturn(purchaseId, data, userId) {
     );
 
     // Insert purchase return
-    const returnNo = `PR-${Date.now()}`;
+    const returnSeq = await client.query(`SELECT NEXTVAL('purchase_return_seq')`);
+    const seqNum = returnSeq.rows[0].nextval.toString().padStart(5, '0');
+    const returnNo = `PR-${new Date().getFullYear()}-${seqNum}`;
+    
     const returnResult = await client.query(
-      `INSERT INTO purchase_returns (purchase_id, return_no, date, total_amount, reason, created_by)
-       VALUES ($1, $2, NOW(), $3, $4, $5)
-       RETURNING id, return_no, purchase_id, date, total_amount, reason, created_at`,
-      [purchaseId, returnNo, totalAmount, data.reason || null, userId],
+      `INSERT INTO purchase_returns (purchase_id, supplier_id, return_no, return_date, total_amount, reason, created_by)
+       VALUES ($1, $2, $3, NOW(), $4, $5, $6)
+       RETURNING id, return_no, purchase_id, supplier_id, return_date, total_amount, reason, created_at`,
+      [purchaseId, purchase.supplier_id, returnNo, totalAmount, data.reason || null, userId],
     );
     const purchaseReturn = returnResult.rows[0];
 
@@ -370,10 +373,11 @@ async function createPurchaseReturn(purchaseId, data, userId) {
       if (Number(item.qty_returned) <= 0) continue;
 
       // Insert return item
+      const itemAmount = Number(item.qty_returned) * Number(item.cost_price);
       await client.query(
-        `INSERT INTO purchase_return_items (purchase_return_id, product_id, qty_returned, cost_price)
-         VALUES ($1, $2, $3, $4)`,
-        [purchaseReturn.id, item.product_id, item.qty_returned, item.cost_price],
+        `INSERT INTO purchase_return_items (purchase_return_id, product_id, qty_returned, unit_price, amount)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [purchaseReturn.id, item.product_id, item.qty_returned, item.cost_price, itemAmount],
       );
 
       // Deduct stock
@@ -415,12 +419,15 @@ async function createPurchaseReturn(purchaseId, data, userId) {
     }
 
     // Create debit note
-    const dnNumber = `DN-${Date.now()}`;
+    const dnSeq = await client.query(`SELECT NEXTVAL('debit_note_seq')`);
+    const dnSeqNum = dnSeq.rows[0].nextval.toString().padStart(5, '0');
+    const dnNumber = `DN-${new Date().getFullYear()}-${dnSeqNum}`;
+    
     await client.query(
       `INSERT INTO supplier_debit_notes
-       (supplier_id, purchase_return_id, debit_note_no, date, total_amount, reason, status)
-       VALUES ($1, $2, $3, NOW(), $4, $5, $6)`,
-      [purchase.supplier_id, purchaseReturn.id, dnNumber, totalAmount, data.reason || null, 'pending'],
+       (supplier_id, purchase_return_id, debit_note_no, amount, notes, status)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [purchase.supplier_id, purchaseReturn.id, dnNumber, totalAmount, data.reason || null, 'outstanding'],
     );
 
     await client.query('COMMIT');
@@ -435,17 +442,17 @@ async function createPurchaseReturn(purchaseId, data, userId) {
 
 async function getPurchaseReturns(purchaseId) {
   const { rows } = await pool.query(
-    `SELECT pr.id, pr.purchase_id, pr.date, pr.total_amount, pr.reason, pr.created_at
+    `SELECT pr.id, pr.purchase_id, pr.return_date AS date, pr.total_amount, pr.reason, pr.created_at
      FROM purchase_returns pr
      WHERE pr.purchase_id = $1
-     ORDER BY pr.date DESC`,
+     ORDER BY pr.return_date DESC`,
     [purchaseId],
   );
 
   // Get items for each return
   for (const ret of rows) {
     const items = await pool.query(
-      `SELECT pri.id, pri.product_id, p.name AS product_name, pri.qty_returned, pri.cost_price
+      `SELECT pri.id, pri.product_id, p.name AS product_name, pri.qty_returned, pri.unit_price AS cost_price
        FROM purchase_return_items pri
        JOIN products p ON p.id = pri.product_id
        WHERE pri.purchase_return_id = $1`,

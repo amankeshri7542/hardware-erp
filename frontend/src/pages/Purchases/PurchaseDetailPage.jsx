@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Spin, Typography, Tag, message,
+  Card, Descriptions, Table, Spin, Typography, Tag, message, Button,
 } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { getPurchase } from '../../api/purchases.api';

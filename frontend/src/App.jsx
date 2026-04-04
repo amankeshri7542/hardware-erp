@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import PrivateRoute from './components/PrivateRoute';
 import AppLayout from './components/AppLayout';
 import ErrorBoundary from './components/ErrorBoundary';
+import useAuthStore from './store/authStore';
+import { Spin } from 'antd';
 
 // Auth pages
 import LoginPage from './pages/Login/LoginPage';
@@ -45,6 +47,7 @@ import ReportsIndexPage from './pages/Reports/ReportsIndexPage';
 import SalesReportPage from './pages/Reports/SalesReportPage';
 import GstReportPage from './pages/Reports/GstReportPage';
 import StockReportPage from './pages/Reports/StockReportPage';
+import StockMovementPage from './pages/Reports/StockMovementPage';
 import CustomerDuesPage from './pages/Reports/CustomerDuesPage';
 import ProfitReportPage from './pages/Reports/ProfitReportPage';
 import CollectionsReportPage from './pages/Reports/CollectionsReportPage';
@@ -53,6 +56,21 @@ import CollectionsReportPage from './pages/Reports/CollectionsReportPage';
 import SettingsPage from './pages/Settings/SettingsPage';
 
 export default function App() {
+  const isInitializing = useAuthStore(state => state.isInitializing);
+  const initialize = useAuthStore(state => state.initialize);
+
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  if (isInitializing) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
   return (
     <ErrorBoundary>
     <BrowserRouter>
@@ -104,6 +122,7 @@ export default function App() {
             <Route path="/reports/sales" element={<SalesReportPage />} />
             <Route path="/reports/gst" element={<GstReportPage />} />
             <Route path="/reports/stock" element={<StockReportPage />} />
+            <Route path="/reports/stock-movement" element={<StockMovementPage />} />
             <Route path="/reports/dues" element={<CustomerDuesPage />} />
             <Route path="/reports/profit" element={<ProfitReportPage />} />
             <Route path="/reports/collections" element={<CollectionsReportPage />} />

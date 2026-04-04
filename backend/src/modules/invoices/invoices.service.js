@@ -17,21 +17,22 @@ function calculateInvoiceTotals(items) {
   let totalCost = 0;
 
   const computed = items.map((item) => {
+    const calcQty = parseFloat(item.base_qty) || parseFloat(item.qty);
     const discountAmount = item.discount_amount != null
       ? parseFloat(item.discount_amount)
       : parseFloat((item.rate * (item.discount_pct || 0) / 100).toFixed(2));
 
-    const taxableAmount = parseFloat(((item.rate - discountAmount) * item.qty).toFixed(2));
+    const taxableAmount = parseFloat(((item.rate - discountAmount) * calcQty).toFixed(2));
     const gstAmount = parseFloat((taxableAmount * (item.gst_pct / 100)).toFixed(2));
     const lineTotal = parseFloat((taxableAmount + gstAmount).toFixed(2));
-    const lineProfit = parseFloat(((item.rate - discountAmount - item.cost_price_snapshot) * item.qty).toFixed(2));
+    const lineProfit = parseFloat(((item.rate - discountAmount - item.cost_price_snapshot) * calcQty).toFixed(2));
 
-    subtotal += parseFloat((item.rate * item.qty).toFixed(2));
-    discountTotal += parseFloat((discountAmount * item.qty).toFixed(2));
+    subtotal += parseFloat((item.rate * calcQty).toFixed(2));
+    discountTotal += parseFloat((discountAmount * calcQty).toFixed(2));
     taxableTotal += taxableAmount;
     gstTotal += gstAmount;
     grandTotal += lineTotal;
-    totalCost += parseFloat((item.cost_price_snapshot * item.qty).toFixed(2));
+    totalCost += parseFloat((item.cost_price_snapshot * calcQty).toFixed(2));
 
     return {
       ...item,
@@ -85,15 +86,10 @@ function determinePaymentStatus(grandTotal, amountPaid) {
 async function createInvoice(data, userId) {
   const client = await pool.connect();
   try {
-    // Step 1: Pre-flight calculations (before BEGIN)
-    const totals = calculateInvoiceTotals(data.items);
-    const status = determinePaymentStatus(totals.grand_total, data.payment.amount_paid);
-    const balanceDue = parseFloat((totals.grand_total - data.payment.amount_paid).toFixed(2));
-
     await client.query('BEGIN');
 
     // Step 2: Resolve unit conversions (alt_qty/alt_unit → base_qty)
-    for (const item of totals.items) {
+    for (const item of data.items) {
       if (item.alt_unit && !item.base_qty) {
         const { rows: convRows } = await client.query(
           `SELECT conversion_value FROM product_unit_conversions
@@ -105,6 +101,11 @@ async function createInvoice(data, userId) {
         }
       }
     }
+
+    // Step 1: Pre-flight calculations (using resolved base_qty)
+    const totals = calculateInvoiceTotals(data.items);
+    const status = determinePaymentStatus(totals.grand_total, data.payment.amount_paid);
+    const balanceDue = parseFloat((totals.grand_total - data.payment.amount_paid).toFixed(2));
 
     // Step 3: Stock validation with FOR UPDATE (locks rows to prevent races)
     const stockFailures = [];
@@ -503,10 +504,17 @@ async function getPresignedPdfUrl(invoiceId) {
     throw err;
   }
   if (!rows[0].pdf_url || rows[0].pdf_status !== 'ready') {
-    const err = new Error('PDF is not ready yet');
-    err.statusCode = 400;
-    err.errorCode = 'PDF_NOT_READY';
-    throw err;
+    console.log('[Invoice] PDF not ready on fetch, generating directly...');
+    try {
+      const s3Key = await generatePdfDirect(invoiceId);
+      const url = await getPresignedUrl(s3Key);
+      return { url, expires_in: 3600 };
+    } catch (err) {
+      const e = new Error('Failed to generate PDF on the fly: ' + err.message);
+      e.statusCode = 500;
+      e.errorCode = 'PDF_GENERATION_FAILED';
+      throw e;
+    }
   }
 
   const url = await getPresignedUrl(rows[0].pdf_url);
@@ -539,7 +547,8 @@ async function processReturn(data, userId) {
     // Fetch original invoice items for validation
     const origItemsResult = await client.query(
       `SELECT id, product_id, qty, unit, rate, discount_pct, discount_amount,
-              gst_pct, cost_price_snapshot, product_name_snapshot, hsn_snapshot
+              gst_pct, cost_price_snapshot, product_name_snapshot, hsn_snapshot,
+              alt_qty, alt_unit, base_qty
        FROM invoice_items WHERE invoice_id = $1`,
       [data.original_invoice_id]
     );
@@ -571,10 +580,14 @@ async function processReturn(data, userId) {
         throw err;
       }
 
+      // Compute return base qty
+      const returnRatio = item.qty_returned / parseFloat(origItem.qty);
+      const returnBaseQty = origItem.base_qty ? parseFloat(origItem.base_qty) * returnRatio : item.qty_returned;
+
       // Restore stock
       const stockResult = await client.query(
         'UPDATE products SET current_stock = current_stock + $1, updated_at = NOW() WHERE id = $2 RETURNING current_stock',
-        [item.qty_returned, item.product_id]
+        [returnBaseQty, item.product_id]
       );
 
       // Stock ledger entry
@@ -584,7 +597,7 @@ async function processReturn(data, userId) {
           qty_in, qty_out, stock_after, notes, created_by
         ) VALUES ($1, NOW(), 'return_in', $2, 'return', $3, 0, $4, $5, $6)`,
         [
-          item.product_id, data.original_invoice_id, item.qty_returned,
+          item.product_id, data.original_invoice_id, returnBaseQty,
           parseFloat(stockResult.rows[0].current_stock),
           'Return against invoice ' + original.invoice_no,
           userId,
@@ -593,10 +606,10 @@ async function processReturn(data, userId) {
 
       // Calculate return line totals using original item's pricing
       const discountAmount = parseFloat(origItem.discount_amount) || 0;
-      const taxableAmount = parseFloat(((item.rate - discountAmount) * item.qty_returned).toFixed(2));
+      const taxableAmount = parseFloat(((item.rate - discountAmount) * returnBaseQty).toFixed(2));
       const gstAmount = parseFloat((taxableAmount * (parseFloat(origItem.gst_pct) / 100)).toFixed(2));
       const lineTotal = parseFloat((taxableAmount + gstAmount).toFixed(2));
-      const lineProfit = parseFloat(((item.rate - discountAmount - parseFloat(origItem.cost_price_snapshot)) * item.qty_returned).toFixed(2));
+      const lineProfit = parseFloat(((item.rate - discountAmount - parseFloat(origItem.cost_price_snapshot)) * returnBaseQty).toFixed(2));
 
       returnItems.push({
         ...item,
@@ -610,12 +623,15 @@ async function processReturn(data, userId) {
         line_total: lineTotal,
         cost_price_snapshot: parseFloat(origItem.cost_price_snapshot),
         line_profit: lineProfit,
+        calc_qty: returnBaseQty,
+        unit: origItem.unit,
+        alt_unit: origItem.alt_unit,
       });
     }
 
     // Calculate credit note totals
-    const returnSubtotal = returnItems.reduce((sum, i) => sum + parseFloat((i.rate * i.qty_returned).toFixed(2)), 0);
-    const returnDiscountTotal = returnItems.reduce((sum, i) => sum + parseFloat((i.discount_amount * i.qty_returned).toFixed(2)), 0);
+    const returnSubtotal = returnItems.reduce((sum, i) => sum + parseFloat((i.rate * i.calc_qty).toFixed(2)), 0);
+    const returnDiscountTotal = returnItems.reduce((sum, i) => sum + parseFloat((i.discount_amount * i.calc_qty).toFixed(2)), 0);
     const returnTaxableTotal = returnItems.reduce((sum, i) => sum + i.taxable_amount, 0);
     const returnGstTotal = returnItems.reduce((sum, i) => sum + i.gst_amount, 0);
     const returnGrandTotal = returnItems.reduce((sum, i) => sum + i.line_total, 0);
@@ -658,8 +674,8 @@ async function processReturn(data, userId) {
           invoice_id, product_id, product_name_snapshot, hsn_snapshot,
           qty, unit, rate, discount_pct, discount_amount,
           taxable_amount, gst_pct, gst_amount, line_total,
-          cost_price_snapshot, line_profit
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+          cost_price_snapshot, line_profit, alt_qty, alt_unit, base_qty
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
         [
           creditNote.id, item.product_id, item.product_name_snapshot,
           item.hsn_snapshot || null,
@@ -667,6 +683,7 @@ async function processReturn(data, userId) {
           item.discount_pct, item.discount_amount,
           -item.taxable_amount, item.gst_pct, -item.gst_amount, -item.line_total,
           item.cost_price_snapshot, -item.line_profit,
+          item.alt_unit ? -item.qty_returned : null, item.alt_unit || null, item.alt_unit ? -item.calc_qty : null
         ]
       );
     }

@@ -10,7 +10,7 @@ const createInvoiceSchema = [
     .isInt({ min: 1 }).withMessage('customer_id must be a positive integer'),
 
   body('customer_name_walkin')
-    .optional()
+    .optional({ nullable: true })
     .isString().withMessage('Walk-in customer name must be a string')
     .isLength({ max: 100 }).withMessage('Walk-in customer name must be under 100 characters'),
 
@@ -41,14 +41,15 @@ const createInvoiceSchema = [
     .notEmpty().withMessage('Product name snapshot cannot be empty'),
 
   body('items.*.hsn_snapshot')
-    .optional()
+    .optional({ nullable: true })
     .isString().withMessage('HSN snapshot must be a string'),
 
   body('items.*.qty')
     .isFloat({ min: 0.001 }).withMessage('Quantity must be greater than 0'),
 
   body('items.*.unit')
-    .isIn(VALID_UNITS).withMessage(`Unit must be one of: ${VALID_UNITS.join(', ')}`),
+    .isString().withMessage('Unit must be a string')
+    .notEmpty().withMessage('Unit cannot be empty'),
 
   body('items.*.rate')
     .isFloat({ min: 0 }).withMessage('Rate must be >= 0'),
@@ -88,7 +89,7 @@ const createInvoiceSchema = [
     .isString().withMessage('Reference number must be a string'),
 
   body('payment.due_date')
-    .optional()
+    .optional({ nullable: true })
     .isISO8601().withMessage('Due date must be a valid ISO 8601 date'),
 
   body('notes')

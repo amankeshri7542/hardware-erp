@@ -8,7 +8,7 @@ import {
   ArrowLeftOutlined, DownloadOutlined, PrinterOutlined,
   RollbackOutlined, DollarOutlined,
 } from '@ant-design/icons';
-import { getInvoice, getPdfUrl } from '../../api/invoices.api';
+import { getInvoice, openInvoicePdf } from '../../api/invoices.api';
 import { getInvoicePayments } from '../../api/payments.api';
 import { formatINR, formatDate } from '../../utils/formatCurrency';
 import ReturnModal from '../../components/ReturnModal/ReturnModal';
@@ -56,8 +56,7 @@ export default function InvoiceDetailPage() {
 
   const handleDownloadPdf = useCallback(async () => {
     try {
-      const { data } = await getPdfUrl(id);
-      window.open(data.data.url, '_blank');
+      await openInvoicePdf(id);
     } catch {
       message.error('Failed to download PDF');
     }

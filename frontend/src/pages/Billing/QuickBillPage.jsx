@@ -8,7 +8,7 @@ import { useBilling } from '../../hooks/useBilling';
 import ProductSearch from '../../components/ProductSearch/ProductSearch';
 import { formatINR } from '../../utils/formatCurrency';
 import { pollPdfStatus } from '../../utils/pdfPoller';
-import { getPdfUrl } from '../../api/invoices.api';
+import { openInvoicePdf } from '../../api/invoices.api';
 
 const { Title, Text } = Typography;
 
@@ -120,8 +120,7 @@ export default function QuickBillPage() {
   const handlePrint = useCallback(async () => {
     if (!successData) return;
     try {
-      const { data } = await getPdfUrl(successData.invoice_id);
-      window.open(data.data.url, '_blank');
+      await openInvoicePdf(successData.invoice_id);
     } catch {
       message.error('Failed to get PDF');
     }

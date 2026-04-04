@@ -9,7 +9,7 @@ async function searchByName(query, limit = 8) {
     `SELECT
        id, name, sku, barcode, unit, mrp, wholesale_price,
        purchase_price, current_stock, gst_rate, hsn_code,
-       is_active,
+       base_unit, is_active,
        similarity(name, $1) AS score
      FROM products
      WHERE
@@ -33,7 +33,7 @@ async function searchByBarcode(barcode) {
   const { rows } = await pool.query(
     `SELECT
        id, name, sku, barcode, unit, mrp, wholesale_price,
-       purchase_price, current_stock, gst_rate, hsn_code
+       purchase_price, current_stock, gst_rate, hsn_code, base_unit
      FROM products
      WHERE barcode = $1 AND is_active = true
      LIMIT 1`,
@@ -51,7 +51,7 @@ async function getFrequentProducts(limit = 6) {
     `SELECT
        p.id, p.name, p.unit, p.mrp, p.wholesale_price,
        p.purchase_price, p.current_stock, p.gst_rate, p.hsn_code,
-       COUNT(ii.id) AS frequency
+       p.base_unit, COUNT(ii.id) AS frequency
      FROM products p
      JOIN invoice_items ii ON ii.product_id = p.id
      JOIN invoices inv ON inv.id = ii.invoice_id
@@ -59,7 +59,7 @@ async function getFrequentProducts(limit = 6) {
        AND p.is_active = true
      GROUP BY p.id, p.name, p.unit, p.mrp,
        p.wholesale_price, p.purchase_price, p.current_stock,
-       p.gst_rate, p.hsn_code
+       p.gst_rate, p.hsn_code, p.base_unit
      ORDER BY frequency DESC
      LIMIT $1`,
     [limit],
@@ -69,7 +69,7 @@ async function getFrequentProducts(limit = 6) {
   if (rows.length === 0) {
     const fallback = await pool.query(
       `SELECT id, name, unit, mrp, wholesale_price, purchase_price,
-              current_stock, gst_rate, hsn_code
+              current_stock, gst_rate, hsn_code, base_unit
        FROM products WHERE is_active = true
        ORDER BY name ASC
        LIMIT $1`,

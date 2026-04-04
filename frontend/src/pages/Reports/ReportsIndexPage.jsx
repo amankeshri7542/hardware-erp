@@ -37,6 +37,13 @@ const REPORT_CARDS = [
     color: '#fff7e6',
   },
   {
+    title: 'Stock Movement',
+    description: 'Detailed ledger of inventory in, out, and return movements over time.',
+    icon: <BarChartOutlined style={{ fontSize: 32, color: '#13c2c2' }} />,
+    path: '/reports/stock-movement',
+    color: '#e6fffb',
+  },
+  {
     title: 'Customer Dues',
     description: 'Outstanding balances, overdue accounts, and ageing analysis.',
     icon: <TeamOutlined style={{ fontSize: 32, color: '#ff4d4f' }} />,

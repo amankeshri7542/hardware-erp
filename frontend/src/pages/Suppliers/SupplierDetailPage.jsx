@@ -28,9 +28,11 @@ export default function SupplierDetailPage() {
         getSupplierDebitNotes(id)
       ]);
       setSupplier(suppRes.data.data);
-      setProducts(prodRes.data.data);
-      setPurchases(purchRes.data.data.purchases);
-      setDebitNotes(notesRes.data.data);
+      const prodData = prodRes.data.data;
+      setProducts(Array.isArray(prodData) ? prodData : prodData?.products || []);
+      setPurchases(purchRes.data.data?.purchases || []);
+      const notesData = notesRes.data.data;
+      setDebitNotes(Array.isArray(notesData) ? notesData : notesData?.debit_notes || []);
     } catch (err) {
       message.error('Failed to load supplier details');
     } finally {
@@ -128,17 +130,26 @@ export default function SupplierDetailPage() {
       </Card>
 
       <Card style={{ marginTop: 24 }}>
-        <Tabs defaultActiveKey="1">
-          <Tabs.TabPane tab="Products Supplied" key="1">
-            <Table columns={productColumns} dataSource={products} rowKey="id" pagination={{ pageSize: 10 }} />
-          </Tabs.TabPane>
-          <Tabs.TabPane tab="Purchase History" key="2">
-            <Table columns={purchaseColumns} dataSource={purchases} rowKey="id" pagination={{ pageSize: 10 }} />
-          </Tabs.TabPane>
-          <Tabs.TabPane tab="Returns & Debit Notes" key="3">
-            <Table columns={debitNoteColumns} dataSource={debitNotes} rowKey="id" pagination={{ pageSize: 10 }} />
-          </Tabs.TabPane>
-        </Tabs>
+        <Tabs 
+          defaultActiveKey="1" 
+          items={[
+            {
+              key: '1',
+              label: 'Products Supplied',
+              children: <Table columns={productColumns} dataSource={products} rowKey="id" pagination={{ pageSize: 10 }} />
+            },
+            {
+              key: '2',
+              label: 'Purchase History',
+              children: <Table columns={purchaseColumns} dataSource={purchases} rowKey="id" pagination={{ pageSize: 10 }} />
+            },
+            {
+              key: '3',
+              label: 'Returns & Debit Notes',
+              children: <Table columns={debitNoteColumns} dataSource={debitNotes} rowKey="id" pagination={{ pageSize: 10 }} />
+            }
+          ]}
+        />
       </Card>
     </div>
   );

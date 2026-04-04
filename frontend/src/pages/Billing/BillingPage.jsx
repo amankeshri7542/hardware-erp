@@ -14,7 +14,7 @@ import ProductSearch from '../../components/ProductSearch/ProductSearch';
 import CustomerSearch from '../../components/CustomerSearch/CustomerSearch';
 import { useBilling } from '../../hooks/useBilling';
 import { formatINR, formatDate } from '../../utils/formatCurrency';
-import { getPdfStatus } from '../../api/invoices.api';
+import { getPdfStatus, openInvoicePdf } from '../../api/invoices.api';
 import { getUnitConversions, updateProduct } from '../../api/products.api';
 import ProductFormModal from '../Products/ProductFormModal';
 import CustomerFormModal from '../Customers/CustomerFormModal';
@@ -74,7 +74,9 @@ export default function BillingPage() {
     }
     try {
       const { data } = await getUnitConversions(productId);
-      const conversions = data.data || [];
+      const conversions = Array.isArray(data?.data?.conversions) ? data.data.conversions
+        : Array.isArray(data?.data) ? data.data
+        : [];
       unitConversionsCache.current[productId] = conversions;
       setUnitConversions(prev => ({ ...prev, [productId]: conversions }));
       return conversions;
@@ -127,8 +129,9 @@ export default function BillingPage() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
         if (submittedInvoice) {
           e.preventDefault();
-          const pdfUrl = `${import.meta.env.VITE_API_URL || '/api'}/invoices/${submittedInvoice.invoice_id}/pdf`;
-          window.open(pdfUrl, '_blank');
+          openInvoicePdf(submittedInvoice.invoice_id).catch(() =>
+            message.error('Failed to open PDF')
+          );
         }
       }
     };
@@ -317,7 +320,8 @@ export default function BillingPage() {
         selected_unit: null,
       });
     } else {
-      const conversions = unitConversionsCache.current[item.product_id] || [];
+      const rawConv = unitConversionsCache.current[item.product_id];
+      const conversions = Array.isArray(rawConv) ? rawConv : [];
       const conv = conversions.find(c => c.unit_name === value);
       if (conv) {
         const altQty = item.qty;
@@ -380,7 +384,8 @@ export default function BillingPage() {
       dataIndex: 'unit',
       width: 100,
       render: (baseUnit, record, idx) => {
-        const conversions = unitConversions[record.product_id] || [];
+        const rawConversions = unitConversions[record.product_id];
+        const conversions = Array.isArray(rawConversions) ? rawConversions : [];
         if (conversions.length === 0) {
           return <Text type="secondary">{baseUnit}</Text>;
         }
@@ -851,7 +856,7 @@ export default function BillingPage() {
                   Due Date (required)
                 </Text>
                 <DatePicker
-                  onChange={(date, dateStr) => setDueDate(dateStr)}
+                  onChange={(date) => setDueDate(date ? date.format('YYYY-MM-DD') : null)}
                   style={{ width: '100%' }}
                   size="small"
                   format="DD-MM-YYYY"
@@ -989,8 +994,9 @@ export default function BillingPage() {
                   type="primary"
                   icon={<PrinterOutlined />}
                   onClick={() => {
-                    const pdfUrl = `${import.meta.env.VITE_API_URL || '/api'}/invoices/${submittedInvoice.invoice_id}/pdf`;
-                    window.open(pdfUrl, '_blank');
+                    openInvoicePdf(submittedInvoice.invoice_id).catch(() =>
+                      message.error('Failed to open PDF')
+                    );
                   }}
                 >
                   Print / Download PDF
@@ -1000,8 +1006,9 @@ export default function BillingPage() {
                 <Button
                   icon={<PrinterOutlined />}
                   onClick={() => {
-                    const pdfUrl = `${import.meta.env.VITE_API_URL || '/api'}/invoices/${submittedInvoice.invoice_id}/pdf`;
-                    window.open(pdfUrl, '_blank');
+                    openInvoicePdf(submittedInvoice.invoice_id).catch(() =>
+                      message.error('Failed to open PDF')
+                    );
                   }}
                 >
                   Try Print

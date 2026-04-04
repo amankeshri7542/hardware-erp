@@ -8,7 +8,7 @@ import {
   SearchOutlined, EyeOutlined, DownloadOutlined,
   LoadingOutlined, WarningOutlined,
 } from '@ant-design/icons';
-import { listInvoices, getPdfUrl } from '../../api/invoices.api';
+import { listInvoices, openInvoicePdf } from '../../api/invoices.api';
 import { formatINR, formatDate } from '../../utils/formatCurrency';
 
 const { Title, Text } = Typography;
@@ -113,8 +113,7 @@ export default function InvoicesPage() {
 
   const handleDownloadPdf = useCallback(async (invoiceId) => {
     try {
-      const { data } = await getPdfUrl(invoiceId);
-      window.open(data.data.url, '_blank');
+      await openInvoicePdf(invoiceId);
     } catch {
       message.error('Failed to download PDF');
     }
@@ -267,8 +266,7 @@ export default function InvoicesPage() {
       </Row>
 
       {/* Filters */}
-      <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: '12px 16px' }}>
-        <Row gutter={[16, 12]} align="middle">
+                <Card style={{ marginBottom: 16 }} styles={{ body: { padding: '12px 16px' } }}>        <Row gutter={[16, 12]} align="middle">
           <Col>
             <Input
               prefix={<SearchOutlined />}
@@ -321,20 +319,17 @@ export default function InvoicesPage() {
       {/* Summary Bar */}
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={8}>
-          <Card size="small" bodyStyle={{ textAlign: 'center' }}>
-            <Text type="secondary">Total Sales</Text>
+                      <Card size="small" styles={{ body: { textAlign: 'center' } }}>            <Text type="secondary">Total Sales</Text>
             <Title level={4} style={{ margin: 0 }}>{formatINR(summary.total_sales)}</Title>
           </Card>
         </Col>
         <Col span={8}>
-          <Card size="small" bodyStyle={{ textAlign: 'center' }}>
-            <Text type="secondary">Total GST</Text>
+                      <Card size="small" styles={{ body: { textAlign: 'center' } }}>            <Text type="secondary">Total GST</Text>
             <Title level={4} style={{ margin: 0 }}>{formatINR(summary.total_gst)}</Title>
           </Card>
         </Col>
         <Col span={8}>
-          <Card size="small" bodyStyle={{ textAlign: 'center' }}>
-            <Text type="secondary">Total Profit</Text>
+                      <Card size="small" styles={{ body: { textAlign: 'center' } }}>            <Text type="secondary">Total Profit</Text>
             <Title
               level={4}
               style={{ margin: 0, color: (summary.total_profit || 0) >= 0 ? '#52c41a' : '#ff4d4f' }}

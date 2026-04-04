@@ -15,8 +15,8 @@ export function useProductSearch({ billType = 'retail', limit = 8 } = {}) {
   // Load frequent products on mount
   useEffect(() => {
     getFrequentProducts()
-      .then(({ data }) => setFrequentProducts(data.data.products))
-      .catch(() => {});
+      .then(({ data }) => setFrequentProducts(Array.isArray(data?.data?.products) ? data.data.products : []))
+      .catch(() => setFrequentProducts([]));
   }, []);
 
   // 150ms debounced search
@@ -32,7 +32,7 @@ export function useProductSearch({ billType = 'retail', limit = 8 } = {}) {
     timerRef.current = setTimeout(async () => {
       try {
         const { data } = await searchProducts({ q: query.trim(), limit });
-        const products = (data.data.products || []).map((p) => ({
+        const products = (Array.isArray(data?.data?.products) ? data.data.products : []).map((p) => ({
           ...p,
           stock_status: p.current_stock > 0 ? 'in_stock' : 'no_stock',
           display_price: billType === 'wholesale' ? p.wholesale_price : p.mrp,
@@ -54,7 +54,7 @@ export function useProductSearch({ billType = 'retail', limit = 8 } = {}) {
   const searchByBarcode = useCallback(async (barcode) => {
     try {
       const { data } = await searchProducts({ barcode });
-      const products = data.data.products || [];
+      const products = Array.isArray(data?.data?.products) ? data.data.products : [];
       return products.length > 0 ? products[0] : null;
     } catch {
       return null;

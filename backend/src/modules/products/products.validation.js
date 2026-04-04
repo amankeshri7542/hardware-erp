@@ -20,7 +20,8 @@ const createProductSchema = [
     .isLength({ max: 100 }).withMessage('Brand must be under 100 characters'),
 
   body('unit')
-    .isIn(VALID_UNITS).withMessage(`Unit must be one of: ${VALID_UNITS.join(', ')}`),
+    .isString().withMessage('Unit must be a string')
+    .notEmpty().withMessage('Unit cannot be empty'),
 
   body('hsn_code')
     .optional()
@@ -85,7 +86,8 @@ const updateProductSchema = [
 
   body('unit')
     .optional()
-    .isIn(VALID_UNITS).withMessage(`Unit must be one of: ${VALID_UNITS.join(', ')}`),
+    .isString().withMessage('Unit must be a string')
+    .notEmpty().withMessage('Unit cannot be empty'),
 
   body('hsn_code')
     .optional()

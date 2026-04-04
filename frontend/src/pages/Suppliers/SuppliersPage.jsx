@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Table, Button, Modal, Form, Input, Tag, Space, Typography,
   message, Spin, Popconfirm,
@@ -64,7 +65,7 @@ export default function SuppliersPage() {
   };
 
   const columns = [
-    { title: 'Name', dataIndex: 'name', key: 'name', render: (t) => <strong>{t}</strong> },
+    { title: 'Name', dataIndex: 'name', key: 'name', render: (t, record) => <Link to={`/suppliers/${record.id}`}><strong>{t}</strong></Link> },
     { title: 'Phone', dataIndex: 'phone', key: 'phone', width: 120 },
     { title: 'GSTIN', dataIndex: 'gstin', key: 'gstin', width: 170 },
     { title: 'Payment Terms', dataIndex: 'payment_terms', key: 'payment_terms', width: 150 },
@@ -97,7 +98,7 @@ export default function SuppliersPage() {
 
       <Modal title={editSupplier ? 'Edit Supplier' : 'New Supplier'}
         open={modalOpen} onCancel={() => setModalOpen(false)}
-        onOk={handleSave} confirmLoading={saving} width={500} destroyOnClose>
+        onOk={handleSave} confirmLoading={saving} width={500} destroyOnClose={false} destroyOnHidden>
         <Form form={form} layout="vertical" requiredMark="optional">
           <Form.Item name="name" label="Supplier Name"
             rules={[{ required: true, message: 'Required' }]}>

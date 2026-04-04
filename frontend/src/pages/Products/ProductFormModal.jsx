@@ -6,8 +6,10 @@ import {
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { 
   createProduct, updateProduct, getProduct, 
-  getUnitConversions, createUnitConversion, deleteUnitConversion 
+  getUnitConversions, createUnitConversion, deleteUnitConversion,
+  getProductSuppliers, linkProductSupplier
 } from '../../api/products.api';
+import { getSuppliers } from '../../api/suppliers.api';
 
 const { Text } = Typography;
 
@@ -38,19 +40,32 @@ export default function ProductFormModal({ open, onClose, onSuccess, productId }
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [suppliers, setSuppliers] = useState([]);
   const isEdit = !!productId;
 
   useEffect(() => {
+    if (open) {
+      getSuppliers().then(res => setSuppliers(res.data.data.suppliers || [])).catch(() => {});
+    }
+
     if (open && productId) {
       setFetching(true);
       Promise.all([
         getProduct(productId),
-        getUnitConversions(productId).catch(() => ({ data: { data: { conversions: [] } } }))
+        getUnitConversions(productId).catch(() => ({ data: { data: { conversions: [] } } })),
+        getProductSuppliers(productId).catch(() => ({ data: { data: { suppliers: [] } } }))
       ])
-        .then(([prodRes, convRes]) => {
+        .then(([prodRes, convRes, suppRes]) => {
           const productData = prodRes.data.data;
           const conversions = convRes.data.data.conversions || [];
-          form.setFieldsValue({ ...productData, conversions });
+          const productSuppliers = suppRes.data.data.suppliers || [];
+          const primarySupplier = productSuppliers.find(s => s.is_primary_supplier) || productSuppliers[0];
+          
+          form.setFieldsValue({ 
+            ...productData, 
+            conversions,
+            supplier_id: primarySupplier ? primarySupplier.supplier_id : undefined
+          });
         })
         .catch(() => message.error('Failed to load product'))
         .finally(() => setFetching(false));
@@ -65,7 +80,7 @@ export default function ProductFormModal({ open, onClose, onSuccess, productId }
       const values = await form.validateFields();
       setLoading(true);
 
-      const { conversions, ...productValues } = values;
+      const { conversions, supplier_id, ...productValues } = values;
       let finalProductId = productId;
 
       if (isEdit) {
@@ -73,8 +88,17 @@ export default function ProductFormModal({ open, onClose, onSuccess, productId }
         message.success('Product updated');
       } else {
         const res = await createProduct(productValues);
-        finalProductId = res.data.id;
+        finalProductId = res.data.data ? res.data.data.id : res.data.id;
         message.success('Product created');
+      }
+
+      // Link supplier if selected
+      if (supplier_id) {
+        await linkProductSupplier(finalProductId, {
+          supplier_id: supplier_id,
+          last_price: productValues.purchase_price,
+          is_primary_supplier: true
+        }).catch(() => message.error('Failed to link supplier'));
       }
 
       // Handle conversions separately
@@ -119,7 +143,8 @@ export default function ProductFormModal({ open, onClose, onSuccess, productId }
       onOk={handleSubmit}
       confirmLoading={loading}
       width={640}
-      destroyOnClose
+      destroyOnClose={false}
+      destroyOnHidden
     >
       <Spin spinning={fetching}>
         <Form form={form} layout="vertical" requiredMark="optional">
@@ -140,6 +165,20 @@ export default function ProductFormModal({ open, onClose, onSuccess, productId }
               />
             </Form.Item>
 
+            <Form.Item name="supplier_id" label="Primary Supplier">
+              <Select 
+                placeholder="Select a supplier"
+                allowClear
+                showSearch
+                filterOption={(input, option) =>
+                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                }
+                options={suppliers.map(s => ({ label: s.name, value: s.id }))}
+              />
+            </Form.Item>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Form.Item name="brand" label="Brand">
               <Input placeholder="e.g. Ambuja" />
             </Form.Item>
