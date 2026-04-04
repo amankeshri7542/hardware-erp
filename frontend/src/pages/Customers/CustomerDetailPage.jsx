@@ -12,6 +12,7 @@ import dayjs from 'dayjs';
 import { getCustomer, getCustomerLedger, getCustomerSummary } from '../../api/customers.api';
 import { formatINR, formatDate } from '../../utils/formatCurrency';
 import CustomerFormModal from './CustomerFormModal';
+import PaymentModal from '../../components/PaymentModal/PaymentModal';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -41,6 +42,7 @@ export default function CustomerDetailPage() {
     dayjs(),
   ]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
 
   const fetchCustomer = useCallback(async () => {
     setLoading(true);
@@ -267,9 +269,16 @@ export default function CustomerDetailPage() {
 
           <Card title="Quick Actions">
             <Space direction="vertical" style={{ width: '100%' }}>
-              <Button block icon={<DollarOutlined />}
-                onClick={() => navigate(`/payments/new?customer_id=${id}`)}>
-                Record Payment
+              <Button
+                block
+                type="primary"
+                icon={<DollarOutlined />}
+                disabled={outstandingBalance <= 0}
+                onClick={() => setPaymentModalOpen(true)}
+              >
+                {outstandingBalance > 0
+                  ? `Receive Payment (${formatINR(outstandingBalance)} due)`
+                  : 'No Dues Outstanding'}
               </Button>
               <Button block icon={<FileTextOutlined />}
                 onClick={() => navigate(`/invoices?customer_id=${id}`)}>
@@ -321,6 +330,22 @@ export default function CustomerDetailPage() {
         onClose={() => setModalOpen(false)}
         onSuccess={() => { fetchCustomer(); fetchSummary(); }}
         customer={customer}
+      />
+
+      {/* Payment Modal — for receiving overdue payments directly from the Customer page */}
+      <PaymentModal
+        open={paymentModalOpen}
+        onClose={() => setPaymentModalOpen(false)}
+        customerId={customer?.id || null}
+        invoiceId={null}
+        balanceDue={outstandingBalance}
+        onSuccess={() => {
+          setPaymentModalOpen(false);
+          fetchCustomer();
+          fetchSummary();
+          fetchLedger();
+          message.success('Payment recorded. Ledger updated.');
+        }}
       />
     </div>
   );

@@ -343,8 +343,7 @@ export default function ProductDetailPage() {
         onCancel={() => setLinkSupplierModal(false)}
         onOk={handleLinkSupplier}
         confirmLoading={linkSaving}
-        destroyOnClose={false}
-        destroyOnHidden
+        destroyOnHidden={false}
       >
         <Form form={linkForm} layout="vertical" requiredMark="optional">
           <Form.Item name="supplier_id" label="Supplier"

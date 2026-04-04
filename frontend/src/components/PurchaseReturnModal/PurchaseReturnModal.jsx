@@ -102,8 +102,7 @@ export default function PurchaseReturnModal({ open, purchase, onClose, onSuccess
       onOk={handleSubmit}
       okText="Submit Return & Generate Debit Note"
       width={800}
-      destroyOnClose={false}
-      destroyOnHidden
+      destroyOnHidden={false}
     >
       <div style={{ marginBottom: 16 }}>
         <p><strong>Supplier:</strong> {purchase.supplier_name}</p>

@@ -167,7 +167,7 @@ export default function ReturnModal({ invoiceId, invoice, open, onClose, onSucce
         danger: true,
       }}
       width={720}
-      destroyOnClose
+      destroyOnHidden
     >
       {error && (
         <Alert

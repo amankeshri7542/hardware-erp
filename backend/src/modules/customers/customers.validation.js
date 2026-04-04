@@ -1,6 +1,8 @@
 const { body } = require('express-validator');
 
-const INDIAN_MOBILE_REGEX = /^[6-9]\d{9}$/;
+// Accept any 10-digit number (mobile or landline, Indian or otherwise)
+// Relaxed from /^[6-9]\d{9}$/ to allow all valid 10-digit numbers beginning with any digit 1-9
+const PHONE_REGEX = /^[1-9]\d{9}$/;
 const PINCODE_REGEX = /^\d{6}$/;
 const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 const VALID_TYPES = ['retail', 'wholesale', 'both'];
@@ -21,8 +23,8 @@ const createCustomerSchema = [
     .notEmpty().withMessage('Phone number is required')
     .customSanitizer((value) => value.replace(/\D/g, ''))
     .custom((value) => {
-      if (!INDIAN_MOBILE_REGEX.test(value)) {
-        throw new Error('Phone must be a valid 10-digit Indian mobile number');
+      if (!PHONE_REGEX.test(value)) {
+        throw new Error('Phone must be a valid 10-digit number');
       }
       return true;
     }),
@@ -32,8 +34,8 @@ const createCustomerSchema = [
     .trim()
     .customSanitizer((value) => value.replace(/\D/g, ''))
     .custom((value) => {
-      if (value && !INDIAN_MOBILE_REGEX.test(value)) {
-        throw new Error('Alternate phone must be a valid 10-digit Indian mobile number');
+      if (value && !PHONE_REGEX.test(value)) {
+        throw new Error('Alternate phone must be a valid 10-digit number');
       }
       return true;
     }),
@@ -110,8 +112,8 @@ const updateCustomerSchema = [
     .trim()
     .customSanitizer((value) => value.replace(/\D/g, ''))
     .custom((value) => {
-      if (!INDIAN_MOBILE_REGEX.test(value)) {
-        throw new Error('Phone must be a valid 10-digit Indian mobile number');
+      if (!PHONE_REGEX.test(value)) {
+        throw new Error('Phone must be a valid 10-digit number');
       }
       return true;
     }),
@@ -121,8 +123,8 @@ const updateCustomerSchema = [
     .trim()
     .customSanitizer((value) => value.replace(/\D/g, ''))
     .custom((value) => {
-      if (value && !INDIAN_MOBILE_REGEX.test(value)) {
-        throw new Error('Alternate phone must be a valid 10-digit Indian mobile number');
+      if (value && !PHONE_REGEX.test(value)) {
+        throw new Error('Alternate phone must be a valid 10-digit number');
       }
       return true;
     }),

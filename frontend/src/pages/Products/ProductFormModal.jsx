@@ -143,8 +143,7 @@ export default function ProductFormModal({ open, onClose, onSuccess, productId }
       onOk={handleSubmit}
       confirmLoading={loading}
       width={640}
-      destroyOnClose={false}
-      destroyOnHidden
+      destroyOnHidden={false}
     >
       <Spin spinning={fetching}>
         <Form form={form} layout="vertical" requiredMark="optional">

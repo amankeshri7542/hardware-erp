@@ -17,10 +17,15 @@ api.interceptors.request.use((config) => {
 });
 
 // Handle 401 — redirect to login
+// IMPORTANT: Exclude /auth/refresh from this interceptor.
+// If we intercept 401s from the refresh endpoint itself, we get an
+// infinite loop: refresh fails → 401 → interceptor fires → logout → redirect.
+// Instead, let the authStore.initialize() catch block handle refresh failures gracefully.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
+    const isRefreshEndpoint = error.config?.url?.includes('/auth/refresh');
+    if (error.response && error.response.status === 401 && !isRefreshEndpoint) {
       useAuthStore.getState().logout();
       window.location.href = '/login';
     }

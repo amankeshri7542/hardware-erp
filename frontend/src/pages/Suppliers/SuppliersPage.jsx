@@ -98,7 +98,7 @@ export default function SuppliersPage() {
 
       <Modal title={editSupplier ? 'Edit Supplier' : 'New Supplier'}
         open={modalOpen} onCancel={() => setModalOpen(false)}
-        onOk={handleSave} confirmLoading={saving} width={500} destroyOnClose={false} destroyOnHidden>
+        onOk={handleSave} confirmLoading={saving} width={500} destroyOnHidden={false}>
         <Form form={form} layout="vertical" requiredMark="optional">
           <Form.Item name="name" label="Supplier Name"
             rules={[{ required: true, message: 'Required' }]}>

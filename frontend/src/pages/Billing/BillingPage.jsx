@@ -682,7 +682,7 @@ export default function BillingPage() {
             <Table
               dataSource={items}
               columns={columns}
-              rowKey={(_, idx) => idx}
+              rowKey={(record, idx) => `${record.product_id || 'item'}-${idx}`}
               pagination={false}
               size="small"
               scroll={{ y: 'calc(100vh - 520px)' }}
