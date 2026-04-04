@@ -20,7 +20,7 @@ export default function ProductSearch({
   autoFocus = false,
   placeholder = 'Search products...',
 }) {
-  const { query, setQuery, results, isLoading } = useProductSearch({ billType });
+  const { query, setQuery, results, isLoading, frequentProducts } = useProductSearch({ billType });
   const [isOpen, setIsOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const inputRef = useRef(null);
@@ -32,12 +32,12 @@ export default function ProductSearch({
     }
   }, [autoFocus]);
 
-  // Open dropdown when there are results to show
+  // Open dropdown when there are results or frequent products to show
   useEffect(() => {
-    if (results.length > 0) {
+    if (results.length > 0 || (query.length === 0 && frequentProducts.length > 0)) {
       setIsOpen(true);
     }
-  }, [results, query]);
+  }, [results, query, frequentProducts]);
 
   const handleSelect = (product) => {
     onSelect(product);
@@ -74,6 +74,8 @@ export default function ProductSearch({
     }
   };
 
+  const showFrequentChips = query.length === 0 && frequentProducts.length > 0 && isOpen;
+
   return (
     <div className="product-search-wrapper">
       <Input
@@ -95,6 +97,23 @@ export default function ProductSearch({
 
       {isOpen && (
         <div className="product-search-dropdown" ref={dropdownRef}>
+          {/* Quick Pick — frequent products when query is empty */}
+          {showFrequentChips && (
+            <div className="product-search-frequent">
+              <span className="frequent-label">QUICK PICK</span>
+              <div className="frequent-chips">
+                {frequentProducts.map((p) => (
+                  <Tag
+                    key={p.id}
+                    className="frequent-chip"
+                    onMouseDown={() => handleSelect(p)}
+                  >
+                    {p.name}
+                  </Tag>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Loading */}
           {isLoading && (
