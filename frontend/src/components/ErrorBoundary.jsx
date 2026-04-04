@@ -1,5 +1,7 @@
 import React from 'react';
-import { Button, Result } from 'antd';
+import { Button, Result, Typography } from 'antd';
+
+const { Text, Paragraph } = Typography;
 
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -18,15 +20,13 @@ export default class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      const errMsg = this.state.error?.message || 'Unknown error';
+      const errStack = this.state.error?.stack || '';
       return (
         <Result
           status="error"
           title="Something went wrong"
-          subTitle={
-            import.meta.env.DEV
-              ? this.state.error?.message
-              : 'Please refresh the page and try again.'
-          }
+          subTitle={errMsg}
           extra={[
             <Button
               type="primary"
@@ -41,6 +41,13 @@ export default class ErrorBoundary extends React.Component {
             >
               Try Again
             </Button>,
+            <div key="details" style={{ marginTop: 16, textAlign: 'left', maxWidth: 600, margin: '16px auto' }}>
+              <Paragraph copyable={{ text: `${errMsg}\n${errStack}` }}>
+                <Text type="secondary" style={{ fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                  {errStack.split('\n').slice(0, 5).join('\n')}
+                </Text>
+              </Paragraph>
+            </div>,
           ]}
         />
       );
