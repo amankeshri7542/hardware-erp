@@ -24,7 +24,7 @@ export function useBilling(initialBillType = 'retail') {
     }
   }, []);
 
-  // Add item from ProductSearch onSelect
+  // Add item from ProductSearch onSelect — returns the new item's index
   const addItem = useCallback((product) => {
     const mrp = parseFloat(product.mrp) || 0;
     const wholesalePrice = parseFloat(product.wholesale_price) || mrp;
@@ -42,8 +42,10 @@ export function useBilling(initialBillType = 'retail') {
       cost_price_snapshot: parseFloat(product.purchase_price) || 0,
     };
     const computed = calculateLineItem(newItem);
+    // Capture the current length before the state update — this is the new item's index
+    const newIndex = items.length;
     setItems(prev => [...prev, computed]);
-    return items.length; // index of new item
+    return newIndex;
   }, [billType, items.length]);
 
   // Update item field and recalculate

@@ -101,7 +101,7 @@ export default function ProductDetailPage() {
     setProductSuppliersLoading(true);
     try {
       const { data } = await getProductSuppliers(id);
-      setProductSuppliers(data.data.suppliers);
+      setProductSuppliers(Array.isArray(data.data.suppliers) ? data.data.suppliers : []);
     } catch {
       message.error('Failed to load product suppliers');
     } finally {
@@ -125,7 +125,7 @@ export default function ProductDetailPage() {
     linkForm.resetFields();
     try {
       const { data } = await getSuppliers();
-      setAllSuppliers(data.data.suppliers);
+      setAllSuppliers(Array.isArray(data.data.suppliers) ? data.data.suppliers : []);
     } catch {
       message.error('Failed to load suppliers list');
     }

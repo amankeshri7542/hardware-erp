@@ -22,7 +22,7 @@ export default function PurchasesPage() {
 
   useEffect(() => {
     getSuppliers()
-      .then(({ data }) => setSuppliers(data.data.suppliers))
+      .then(({ data }) => setSuppliers(Array.isArray(data.data.suppliers) ? data.data.suppliers : []))
       .catch(() => {});
   }, []);
 
@@ -35,8 +35,8 @@ export default function PurchasesPage() {
       if (supplierId) params.supplier_id = supplierId;
 
       const { data } = await getPurchases(params);
-      setPurchases(data.data.purchases);
-      setPagination((prev) => ({ ...prev, total: data.data.pagination.total }));
+      setPurchases(Array.isArray(data.data.purchases) ? data.data.purchases : []);
+      setPagination((prev) => ({ ...prev, total: data.data.pagination?.total || 0 }));
     } catch {
       message.error('Failed to load purchases');
     } finally {

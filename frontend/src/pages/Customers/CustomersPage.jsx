@@ -50,8 +50,8 @@ export default function CustomersPage() {
       if (duesFilter !== 'all') params.dues_filter = duesFilter;
 
       const { data } = await listCustomers(params);
-      setCustomers(data.data.customers);
-      setPagination((prev) => ({ ...prev, total: data.data.pagination.total }));
+      setCustomers(Array.isArray(data.data.customers) ? data.data.customers : []);
+      setPagination((prev) => ({ ...prev, total: data.data.pagination?.total || 0 }));
     } catch {
       message.error('Failed to load customers');
     } finally {

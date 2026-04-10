@@ -138,10 +138,10 @@ async function createPurchaseWithStockIn(data, userId) {
 
     // Step 1: INSERT purchase
     const purchaseResult = await client.query(
-      `INSERT INTO purchases (supplier_id, po_number, date, total_amount, status, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, po_number, date, total_amount, status, created_at`,
-      [data.supplier_id, poNumber, data.date, totalAmount, 'received', userId],
+      `INSERT INTO purchases (supplier_id, po_number, date, total_amount, notes, status, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, po_number, date, total_amount, notes, status, created_at`,
+      [data.supplier_id, poNumber, data.date, totalAmount, data.notes || null, 'received', userId],
     );
     const purchase = purchaseResult.rows[0];
 
@@ -176,7 +176,17 @@ async function createPurchaseWithStockIn(data, userId) {
 
       const updatedProduct = productUpdate.rows[0];
 
-      // 2c. INSERT stock_ledger entry
+      // 2c. UPSERT product_suppliers — links this product to the supplier automatically
+      await client.query(
+        `INSERT INTO product_suppliers (product_id, supplier_id, last_price, last_purchase_date)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (product_id, supplier_id) DO UPDATE
+           SET last_price = EXCLUDED.last_price,
+               last_purchase_date = EXCLUDED.last_purchase_date`,
+        [item.product_id, data.supplier_id, item.cost_price, data.date],
+      );
+
+      // 2d. INSERT stock_ledger entry
       await client.query(
         `INSERT INTO stock_ledger
          (product_id, date, movement_type, reference_id, reference_type,
@@ -270,7 +280,8 @@ async function getPurchases({ supplierId, from, to, page = 1, limit = 20 }) {
 async function getPurchaseById(id) {
   const purchaseResult = await pool.query(
     `SELECT p.id, p.po_number, p.date, p.total_amount, p.status,
-            p.created_at, s.name AS supplier_name, s.id AS supplier_id
+            p.notes, p.invoice_file_url, p.created_at,
+            s.name AS supplier_name, s.id AS supplier_id
      FROM purchases p
      JOIN suppliers s ON s.id = p.supplier_id
      WHERE p.id = $1`,
@@ -464,6 +475,15 @@ async function getPurchaseReturns(purchaseId) {
   return rows;
 }
 
+async function updatePurchaseInvoiceUrl(id, fileUrl) {
+  const { rows } = await pool.query(
+    `UPDATE purchases SET invoice_file_url = $1 WHERE id = $2
+     RETURNING id, invoice_file_url`,
+    [fileUrl, id],
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   createSupplier,
   getSuppliers,
@@ -472,6 +492,7 @@ module.exports = {
   createPurchaseWithStockIn,
   getPurchases,
   getPurchaseById,
+  updatePurchaseInvoiceUrl,
   getSupplierProducts,
   getSupplierDebitNotes,
   createPurchaseReturn,

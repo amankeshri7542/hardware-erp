@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Table, Button, Modal, Form, Input, Tag, Space, Typography,
-  message, Spin, Popconfirm,
+  message, Spin,
 } from 'antd';
-import { PlusOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons';
 import { getSuppliers, createSupplier, updateSupplier } from '../../api/suppliers.api';
 
 const { Title } = Typography;
@@ -12,6 +12,7 @@ const { Title } = Typography;
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editSupplier, setEditSupplier] = useState(null);
   const [form] = Form.useForm();
@@ -21,7 +22,7 @@ export default function SuppliersPage() {
     setLoading(true);
     try {
       const { data } = await getSuppliers();
-      setSuppliers(data.data.suppliers);
+      setSuppliers(Array.isArray(data.data.suppliers) ? data.data.suppliers : []);
     } catch {
       message.error('Failed to load suppliers');
     } finally {
@@ -82,18 +83,36 @@ export default function SuppliersPage() {
     },
   ];
 
+  const filtered = suppliers.filter((s) => {
+    const q = searchText.toLowerCase();
+    return (
+      s.name?.toLowerCase().includes(q) ||
+      s.phone?.includes(q) ||
+      s.gstin?.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <Title level={3} style={{ margin: 0 }}>Suppliers</Title>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
           Add Supplier
         </Button>
       </div>
 
+      <Input
+        placeholder="Search by name, phone or GSTIN..."
+        prefix={<SearchOutlined />}
+        value={searchText}
+        onChange={(e) => setSearchText(e.target.value)}
+        allowClear
+        style={{ maxWidth: 360, marginBottom: 16 }}
+      />
+
       <Spin spinning={loading}>
-        <Table dataSource={suppliers} columns={columns} rowKey="id"
-          pagination={false} size="middle" />
+        <Table dataSource={filtered} columns={columns} rowKey="id"
+          pagination={{ pageSize: 20, hideOnSinglePage: true }} size="middle" />
       </Spin>
 
       <Modal title={editSupplier ? 'Edit Supplier' : 'New Supplier'}

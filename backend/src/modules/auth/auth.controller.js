@@ -3,8 +3,10 @@ const authService = require('./auth.service');
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
-  sameSite: 'strict',
-  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  // secure: false because the app runs on HTTP (not HTTPS).
+  // Change to true only after enabling HTTPS.
+  secure: false,
   path: '/',
 };
 

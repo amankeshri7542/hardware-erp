@@ -12,7 +12,7 @@ export default function LowStockPage() {
 
   useEffect(() => {
     getLowStockProducts()
-      .then(({ data }) => setProducts(data.data.products))
+      .then(({ data }) => setProducts(Array.isArray(data.data.products) ? data.data.products : []))
       .catch(() => message.error('Failed to load low stock products'))
       .finally(() => setLoading(false));
   }, []);

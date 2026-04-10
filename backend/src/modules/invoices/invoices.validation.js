@@ -99,9 +99,8 @@ const createInvoiceSchema = [
 ];
 
 const returnInvoiceSchema = [
-  body('original_invoice_id')
-    .notEmpty().withMessage('Original invoice ID is required')
-    .isInt({ min: 1 }).withMessage('Original invoice ID must be a positive integer'),
+  // NOTE: original_invoice_id comes from URL params (:id), NOT from body.
+  // The controller adds it to data after validation runs, so do NOT validate it here.
 
   body('items')
     .isArray({ min: 1 }).withMessage('At least one return item is required'),
@@ -115,12 +114,8 @@ const returnInvoiceSchema = [
   body('items.*.qty_returned')
     .isFloat({ min: 0.001 }).withMessage('Return quantity must be greater than 0'),
 
-  body('items.*.unit')
-    .isString().withMessage('Unit is required')
-    .notEmpty().withMessage('Unit cannot be empty'),
-
-  body('items.*.rate')
-    .isFloat({ min: 0 }).withMessage('Rate must be >= 0'),
+  // unit and rate are NOT sent by the frontend — the service reads them from
+  // the original invoice item. Do not require them here.
 
   body('reason')
     .optional()

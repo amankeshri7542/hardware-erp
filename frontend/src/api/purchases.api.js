@@ -11,3 +11,13 @@ export const createPurchaseReturn = (id, data) =>
 
 export const getPurchaseReturns = (id) =>
   api.get(`/purchases/${id}/returns`);
+
+export const uploadPurchaseInvoice = (id, file) => {
+  const form = new FormData();
+  form.append('invoice', file);
+  return api.post(`/purchases/${id}/invoice`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
+export const getPurchaseInvoiceUrl = (id) => api.get(`/purchases/${id}/invoice`);

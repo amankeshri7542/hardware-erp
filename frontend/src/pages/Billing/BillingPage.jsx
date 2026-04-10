@@ -22,6 +22,15 @@ import './BillingPage.css';
 
 const { Title, Text } = Typography;
 
+// All units commonly used in a hardware shop
+const HARDWARE_UNITS = [
+  'piece', 'kg', 'g', 'quintal', 'tonne',
+  'bag', 'box', 'bundle', 'roll',
+  'litre', 'ml',
+  'metre', 'foot', 'inch', 'cm',
+  'sheet', 'plate', 'set', 'pair', 'no.',
+];
+
 const PAYMENT_MODES = [
   { key: 'cash', label: 'Cash', icon: <WalletOutlined /> },
   { key: 'upi', label: 'UPI', icon: <QrcodeOutlined /> },
@@ -382,23 +391,33 @@ export default function BillingPage() {
     {
       title: 'Unit',
       dataIndex: 'unit',
-      width: 100,
+      width: 110,
       render: (baseUnit, record, idx) => {
         const rawConversions = unitConversions[record.product_id];
         const conversions = Array.isArray(rawConversions) ? rawConversions : [];
-        if (conversions.length === 0) {
-          return <Text type="secondary">{baseUnit}</Text>;
-        }
-        const options = [
-          { label: baseUnit, value: baseUnit },
-          ...conversions.map(c => ({ label: c.unit_name, value: c.unit_name })),
-        ];
+
+        // If product has unit conversions, show them; otherwise show all hardware units
+        const options = conversions.length > 0
+          ? [
+              { label: baseUnit, value: baseUnit },
+              ...conversions.map(c => ({ label: c.unit_name, value: c.unit_name })),
+            ]
+          : HARDWARE_UNITS.map(u => ({ label: u, value: u }));
+
         return (
           <Select
             size="small"
             value={record.selected_unit || baseUnit}
             options={options}
-            onChange={(val) => handleUnitChange(idx, val, record)}
+            showSearch
+            onChange={(val) => {
+              if (conversions.length > 0) {
+                handleUnitChange(idx, val, record);
+              } else {
+                // Simple unit label change — no stock conversion
+                updateItem(idx, 'unit', val);
+              }
+            }}
             style={{ width: '100%' }}
             popupMatchSelectWidth={false}
           />
@@ -466,8 +485,22 @@ export default function BillingPage() {
     {
       title: 'GST%',
       dataIndex: 'gst_pct',
-      width: 65,
-      render: (val) => <Text type="secondary">{val}%</Text>,
+      width: 90,
+      render: (val, _, idx) => (
+        <InputNumber
+          size="small"
+          min={0}
+          max={100}
+          step={1}
+          value={val}
+          onChange={(v) => updateItem(idx, 'gst_pct', v ?? 0)}
+          onFocus={(e) => e.target.select()}
+          style={{ width: '100%' }}
+          addonAfter="%"
+          formatter={(v) => `${v}`}
+          parser={(v) => v?.replace('%', '') ?? 0}
+        />
+      ),
     },
     {
       title: 'Amount',

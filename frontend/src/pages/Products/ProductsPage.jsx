@@ -46,8 +46,8 @@ export default function ProductsPage() {
       if (!showInactive) params.is_active = 'true';
 
       const { data } = await getProducts(params);
-      setProducts(data.data.products);
-      setPagination((prev) => ({ ...prev, total: data.data.pagination.total }));
+      setProducts(Array.isArray(data.data.products) ? data.data.products : []);
+      setPagination((prev) => ({ ...prev, total: data.data.pagination?.total || 0 }));
     } catch {
       message.error('Failed to load products');
     } finally {

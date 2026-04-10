@@ -175,7 +175,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '100px 0' }}>
-        <Spin size="large" tip="Loading dashboard..." />
+        <Spin size="large" />
       </div>
     );
   }
@@ -203,9 +203,9 @@ export default function DashboardPage() {
         {summaryCards.map((card) => (
           <Col xs={24} sm={12} lg={8} xl={6} key={card.title}>
             <Card
-              bordered={false}
+              variant="borderless"
               style={{ borderRadius: 8, background: card.bg }}
-              bodyStyle={{ padding: '20px 24px' }}
+              styles={{ body: { padding: '20px 24px' } }}
             >
               <Statistic
                 title={<Text type="secondary">{card.title}</Text>}

@@ -86,13 +86,13 @@ export default function SupplierDetailPage() {
 
   // Columns for Purchase History
   const purchaseColumns = [
-    { title: 'Date', dataIndex: 'date', key: 'date', render: val => new Date(val).toLocaleDateString() },
-    { title: 'Bill No.', dataIndex: 'supplier_bill_no', key: 'supplier_bill_no' },
-    { title: 'Total Amount', dataIndex: 'total_amount', key: 'total_amount', render: val => formatINR(val) },
-    { title: 'Amount Paid', dataIndex: 'amount_paid', key: 'amount_paid', render: val => <Text type="success">{formatINR(val)}</Text> },
+    { title: 'Date', dataIndex: 'date', key: 'date', render: val => new Date(val).toLocaleDateString('en-IN') },
+    { title: 'PO Number', dataIndex: 'po_number', key: 'po_number' },
+    { title: 'Items', dataIndex: 'item_count', key: 'item_count', width: 70, align: 'center' },
+    { title: 'Total Amount', dataIndex: 'total_amount', key: 'total_amount', render: val => formatINR(val), align: 'right' },
     { title: 'Status', dataIndex: 'status', key: 'status', render: val => {
-      const colors = { paid: 'green', partial: 'orange', pending: 'red' };
-      return <Tag color={colors[val]}>{val ? val.toUpperCase() : 'N/A'}</Tag>;
+      const colors = { received: 'green', draft: 'orange' };
+      return <Tag color={colors[val] || 'default'}>{val ? val.toUpperCase() : 'N/A'}</Tag>;
     }}
   ];
 
@@ -121,11 +121,7 @@ export default function SupplierDetailPage() {
           <Descriptions.Item label="GSTIN">{supplier.gstin || 'N/A'}</Descriptions.Item>
           <Descriptions.Item label="Email">{supplier.email || 'N/A'}</Descriptions.Item>
           <Descriptions.Item label="Address" span={2}>{[supplier.address, supplier.city, supplier.pincode].filter(Boolean).join(', ')}</Descriptions.Item>
-          <Descriptions.Item label="Outstanding Balance">
-            <Text type={supplier.outstanding_balance > 0 ? "danger" : "success"} strong>
-              {formatINR(supplier.outstanding_balance)}
-            </Text>
-          </Descriptions.Item>
+          <Descriptions.Item label="Payment Terms">{supplier.payment_terms || 'N/A'}</Descriptions.Item>
         </Descriptions>
       </Card>
 

@@ -2,19 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Select, DatePicker, Input, Button, Table, InputNumber,
-  Typography, Space, message, Divider,
+  Typography, Space, message, Upload, Modal, Form,
 } from 'antd';
-import { PlusOutlined, DeleteOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined, DeleteOutlined, CheckCircleOutlined,
+  UploadOutlined, FilePdfOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { createPurchase } from '../../api/purchases.api';
+import { createPurchase, uploadPurchaseInvoice } from '../../api/purchases.api';
 import { getSuppliers, createSupplier } from '../../api/suppliers.api';
 import ProductSearch from '../../components/ProductSearch/ProductSearch';
+import ProductFormModal from '../Products/ProductFormModal';
 import { formatINR } from '../../utils/formatCurrency';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
-const UNIT_OPTIONS = ['piece', 'kg', 'box', 'metre', 'litre', 'set'];
+const UNIT_OPTIONS = [
+  'piece', 'kg', 'g', 'quintal', 'tonne',
+  'bag', 'box', 'bundle', 'roll',
+  'litre', 'ml',
+  'metre', 'foot', 'inch', 'cm',
+  'sheet', 'plate', 'set', 'pair', 'no.',
+];
 
 export default function NewPurchasePage() {
   const navigate = useNavigate();
@@ -26,11 +36,23 @@ export default function NewPurchasePage() {
   const [items, setItems] = useState([]);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
+  // Invoice file upload
+  const [invoiceFile, setInvoiceFile] = useState(null);
+
+  // Quick-add supplier modal
+  const [supplierModalOpen, setSupplierModalOpen] = useState(false);
+  const [supplierForm] = Form.useForm();
+  const [savingSupplier, setSavingSupplier] = useState(false);
+
+  // Quick-add product modal
+  const [showProductModal, setShowProductModal] = useState(false);
+
+  const fetchSuppliers = () =>
     getSuppliers()
-      .then(({ data }) => setSuppliers(data.data.suppliers))
+      .then(({ data }) => setSuppliers(Array.isArray(data.data.suppliers) ? data.data.suppliers : []))
       .catch(() => {});
-  }, []);
+
+  useEffect(() => { fetchSuppliers(); }, []);
 
   // Handle pre-filled product from state (e.g., from quick restock)
   useEffect(() => {
@@ -49,7 +71,6 @@ export default function NewPurchasePage() {
   }, [location.state]);
 
   const handleProductSelect = (product) => {
-    // Check if product already in items
     if (items.some((item) => item.product_id === product.id)) {
       message.warning('Product already added');
       return;
@@ -85,6 +106,23 @@ export default function NewPurchasePage() {
 
   const totalAmount = items.reduce((sum, item) => sum + item.line_total, 0);
 
+  const handleSaveSupplier = async () => {
+    try {
+      const values = await supplierForm.validateFields();
+      setSavingSupplier(true);
+      const { data } = await createSupplier(values);
+      message.success('Supplier created');
+      await fetchSuppliers();
+      setSupplierId(data.data?.id || data.id);
+      setSupplierModalOpen(false);
+      supplierForm.resetFields();
+    } catch (err) {
+      if (!err.errorFields) message.error('Failed to create supplier');
+    } finally {
+      setSavingSupplier(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!supplierId) { message.error('Please select a supplier'); return; }
     if (items.length === 0) { message.error('Add at least one item'); return; }
@@ -101,7 +139,17 @@ export default function NewPurchasePage() {
       };
 
       const { data } = await createPurchase(payload);
+      const purchaseId = data.data.purchase.id;
       const updates = data.data.stockUpdates || [];
+
+      // Upload invoice file if selected
+      if (invoiceFile) {
+        try {
+          await uploadPurchaseInvoice(purchaseId, invoiceFile);
+        } catch {
+          message.warning('Purchase saved but invoice file upload failed. You can retry from the purchase detail page.');
+        }
+      }
 
       message.success({
         content: (
@@ -117,7 +165,7 @@ export default function NewPurchasePage() {
         duration: 5,
       });
 
-      navigate(`/purchases/${data.data.purchase.id}`);
+      navigate(`/purchases/${purchaseId}`);
     } catch (err) {
       message.error(err.response?.data?.error || 'Failed to create purchase');
     } finally {
@@ -139,11 +187,13 @@ export default function NewPurchasePage() {
       ),
     },
     {
-      title: 'Unit', dataIndex: 'unit', key: 'unit', width: 100,
+      title: 'Unit', dataIndex: 'unit', key: 'unit', width: 110,
       render: (v, record) => (
         <Select value={v} size="small" style={{ width: '100%' }}
           onChange={(val) => updateItem(record.key, 'unit', val)}
-          options={UNIT_OPTIONS.map((u) => ({ label: u, value: u }))} />
+          options={UNIT_OPTIONS.map((u) => ({ label: u, value: u }))}
+          showSearch
+        />
       ),
     },
     {
@@ -176,14 +226,21 @@ export default function NewPurchasePage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div>
             <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>Supplier *</Text>
-            <Select
-              showSearch placeholder="Select supplier" style={{ width: '100%' }}
-              value={supplierId} onChange={setSupplierId}
-              filterOption={(input, option) =>
-                option.label.toLowerCase().includes(input.toLowerCase())
-              }
-              options={suppliers.map((s) => ({ label: s.name, value: s.id }))}
-            />
+            <Space.Compact style={{ width: '100%' }}>
+              <Select
+                showSearch placeholder="Select supplier" style={{ width: '100%' }}
+                value={supplierId} onChange={setSupplierId}
+                filterOption={(input, option) =>
+                  option.label.toLowerCase().includes(input.toLowerCase())
+                }
+                options={suppliers.map((s) => ({ label: s.name, value: s.id }))}
+              />
+              <Button
+                icon={<PlusOutlined />}
+                title="Add new supplier"
+                onClick={() => { supplierForm.resetFields(); setSupplierModalOpen(true); }}
+              />
+            </Space.Compact>
           </div>
           <div>
             <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>Date *</Text>
@@ -195,10 +252,51 @@ export default function NewPurchasePage() {
           <TextArea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)}
             placeholder="Optional purchase notes" />
         </div>
+
+        {/* Invoice file upload */}
+        <div style={{ marginTop: 12 }}>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+            Supplier Invoice (optional, max 5 MB — PDF / JPG / PNG)
+          </Text>
+          <Upload
+            beforeUpload={(file) => {
+              const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+              if (!allowed.includes(file.type)) {
+                message.error('Only PDF and image files are allowed');
+                return Upload.LIST_IGNORE;
+              }
+              if (file.size > 5 * 1024 * 1024) {
+                message.error('File must be smaller than 5 MB');
+                return Upload.LIST_IGNORE;
+              }
+              setInvoiceFile(file);
+              return false; // prevent auto-upload
+            }}
+            onRemove={() => setInvoiceFile(null)}
+            maxCount={1}
+            fileList={invoiceFile ? [{ uid: '-1', name: invoiceFile.name, status: 'done' }] : []}
+          >
+            <Button icon={invoiceFile ? <FilePdfOutlined /> : <UploadOutlined />}>
+              {invoiceFile ? invoiceFile.name : 'Attach Invoice File'}
+            </Button>
+          </Upload>
+        </div>
       </Card>
 
       {/* Add Product */}
-      <Card title="Add Products" style={{ marginBottom: 16 }}>
+      <Card
+        title="Add Products"
+        style={{ marginBottom: 16 }}
+        extra={
+          <Button
+            icon={<PlusOutlined />}
+            size="small"
+            onClick={() => setShowProductModal(true)}
+          >
+            Create New Product
+          </Button>
+        }
+      >
         <ProductSearch
           onSelect={handleProductSelect}
           billType="retail"
@@ -234,6 +332,51 @@ export default function NewPurchasePage() {
           </Button>
         </Space>
       </div>
+
+      {/* Quick-add Supplier Modal */}
+      <Modal
+        title="New Supplier"
+        open={supplierModalOpen}
+        onCancel={() => setSupplierModalOpen(false)}
+        onOk={handleSaveSupplier}
+        confirmLoading={savingSupplier}
+        width={480}
+        destroyOnHidden
+      >
+        <Form form={supplierForm} layout="vertical" requiredMark="optional">
+          <Form.Item name="name" label="Supplier Name"
+            rules={[{ required: true, message: 'Required' }]}>
+            <Input placeholder="e.g. ABC Hardware Pvt Ltd" />
+          </Form.Item>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Form.Item name="phone" label="Phone">
+              <Input placeholder="10-digit number" maxLength={10} />
+            </Form.Item>
+            <Form.Item name="email" label="Email">
+              <Input placeholder="supplier@example.com" />
+            </Form.Item>
+          </div>
+          <Form.Item name="gstin" label="GSTIN">
+            <Input placeholder="15-character GSTIN" maxLength={15} />
+          </Form.Item>
+          <Form.Item name="address" label="Address">
+            <Input.TextArea rows={2} placeholder="Full address" />
+          </Form.Item>
+          <Form.Item name="payment_terms" label="Payment Terms">
+            <Input placeholder="e.g. Net 30 days" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Quick-add Product Modal */}
+      <ProductFormModal
+        open={showProductModal}
+        onClose={() => setShowProductModal(false)}
+        onSuccess={(product) => {
+          setShowProductModal(false);
+          if (product) handleProductSelect(product);
+        }}
+      />
     </div>
   );
 }
