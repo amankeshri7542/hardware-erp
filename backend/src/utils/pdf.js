@@ -296,9 +296,18 @@ async function generateInvoicePDF(invoiceData, options = {}) {
   const isThermal = templateName === 'invoice-thermal';
 
   // Launch Puppeteer and generate PDF
+  // --disable-gpu + --no-zygote: required when running headless inside a systemd/PM2 service
+  // --disable-dev-shm-usage: avoids /dev/shm too small on low-memory VMs (t2.micro)
   const launchOptions = {
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-zygote',
+      '--no-first-run',
+    ],
   };
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
     launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
