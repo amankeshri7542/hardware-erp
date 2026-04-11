@@ -23,10 +23,16 @@ const UPDATABLE_FIELDS = new Set([
 /**
  * List products with filters & pagination.
  */
-async function getAllProducts({ category, isActive, lowStockOnly, page = 1, limit = 20 }) {
+async function getAllProducts({ search, category, isActive, lowStockOnly, page = 1, limit = 20 }) {
   const conditions = [];
   const values = [];
   let idx = 1;
+
+  if (search && search.trim()) {
+    conditions.push(`(name ILIKE $${idx} OR sku ILIKE $${idx} OR barcode ILIKE $${idx} OR category ILIKE $${idx})`);
+    values.push(`%${search.trim()}%`);
+    idx++;
+  }
 
   if (category) {
     conditions.push(`category = $${idx++}`);

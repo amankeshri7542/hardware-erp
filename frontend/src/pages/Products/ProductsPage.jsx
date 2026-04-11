@@ -143,7 +143,7 @@ export default function ProductsPage() {
         </Col>
       </Row>
 
-      <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: '12px 16px' }}>
+      <Card style={{ marginBottom: 16 }} styles={{ body: { padding: '12px 16px' } }}>
         <Row gutter={16} align="middle">
           <Col flex="auto">
             <Input prefix={<SearchOutlined />} placeholder="Search products..."

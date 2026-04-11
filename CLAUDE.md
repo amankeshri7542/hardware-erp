@@ -6,8 +6,41 @@
 **Stack:** Node.js + Express | React 18 + Ant Design 5 | PostgreSQL 15 (AWS RDS)
 **Live:** `http://13.204.240.166` — Login: `admin@store.local` / `Aman@9431`
 **Scale:** ~100-150 invoices/day, 2-3 users, single admin role
+**Last deployed:** 2026-04-11 | **Git:** `main` branch on `amankeshri7542/hardware-ERP`
 
-Handles: retail/wholesale billing, inventory, customer ledgers (khata), payments, PDF invoices, GST reports, Excel exports.
+Handles: retail/wholesale billing, inventory, customer ledgers (khata), payments, PDF invoices, GST reports, Excel exports, purchase invoice uploads, sales returns.
+
+## Local Dev Setup
+
+```bash
+# Backend (reads .env.local → local PostgreSQL uma_erp)
+cd hardware-erp/backend && npm run dev   # port 4000
+
+# Frontend (reads .env.local → proxy to localhost:4000)
+cd hardware-erp/frontend && npm run dev  # port 5173
+```
+
+**Key env files (all gitignored):**
+- `backend/.env` — production (AWS RDS, S3, JWT secrets)
+- `backend/.env.local` — local dev (localhost PostgreSQL, simple JWT secrets)
+- `frontend/.env` — production API URL (`http://13.204.240.166/api`)
+- `frontend/.env.local` — local dev (`VITE_API_URL=` → Vite proxy)
+
+**Deploy to EC2:**
+```bash
+# 1. Build + upload frontend
+cd hardware-erp/frontend && npm run build
+scp -i hardware-erp-key-ec2.pem -r dist/ ubuntu@13.204.240.166:~/frontend-dist
+
+# 2. SSH and deploy
+ssh -i hardware-erp-key-ec2.pem ubuntu@13.204.240.166
+cd ~/hardware-ERP && git pull origin main
+cd backend && npm install
+sudo rm -rf /var/www/hardware-erp/frontend/dist/* && sudo cp -r ~/frontend-dist/* /var/www/hardware-erp/frontend/dist/
+sudo chown -R www-data:www-data /var/www/hardware-erp/frontend/dist
+sudo nginx -s reload
+pm2 restart all --update-env
+```
 
 ## Detailed Documentation
 

@@ -73,6 +73,50 @@
 - Customer ledger adjustment on returns
 - Invoice balance recalculation after return
 
+## Phase 7 — Security Audit, UX Improvements & Infrastructure (April 2026)
+
+### April 10–11, 2026
+
+**Security & Stability:**
+- Startup env-var validation in server.js (exits loudly if JWT_SECRET etc. missing)
+- multer 1.x → 2.x (security rewrite, same API)
+- bcrypt 5.x → 6.x (fixes tar/node-pre-gyp vulnerability chain — 0 vulnerabilities)
+- Backend cookie: `secure: false`, `sameSite: lax` (HTTP workaround until HTTPS)
+- Duplicate export route registration removed from reports.router.js
+- Array.isArray() guards on all frontend setState calls for list data
+
+**Auth:**
+- authStore.js: localStorage token persistence (fixes auto-logout on page refresh)
+- Refresh token cookie settings fixed for HTTP environment
+
+**Purchases Module:**
+- Migration 008: `notes` + `invoice_file_url` columns on purchases table
+- Purchase invoice file upload (multer, PDF/image, 5MB max, S3 or local)
+- Auto-link products to suppliers on purchase creation (product_suppliers UPSERT)
+- "Add Supplier" inline modal on NewPurchasePage
+- "Create New Product" button on NewPurchasePage (reuses ProductFormModal)
+- Invoice file view in PurchaseDetailPage
+
+**Billing UX:**
+- Unit column: dropdown with 20 hardware units for ALL products (not just ones with unit conversions)
+- GST% column: editable InputNumber per line item (was read-only)
+
+**Supplier Module:**
+- Supplier list: search bar (filters by name/phone/GSTIN)
+- Supplier detail: removed non-existent outstanding_balance field (was showing ₹NaN)
+- Supplier detail: Purchase History columns fixed (po_number, total_amount, item_count)
+
+**Bug Fixes:**
+- Return 422: returnInvoiceSchema removed invalid body field requirements
+- Dashboard: Spin tip warning fixed, Card bodyStyle deprecated prop fixed
+- Supplier Products Supplied tab: now auto-populated from purchases
+
+**Infrastructure:**
+- Google Chrome installed on EC2 for Puppeteer PDF generation
+- PUPPETEER_EXECUTABLE_PATH set to /usr/bin/google-chrome-stable
+- Puppeteer flags: --disable-gpu, --no-zygote, --no-first-run added
+- Local dev setup: .env.local for backend (local PostgreSQL), frontend .env.local (proxy to localhost:4000)
+
 ## Phase 6 — Bug Fixes & Audit (April 2026)
 
 ### Codebase Audit (April 5, 2026)

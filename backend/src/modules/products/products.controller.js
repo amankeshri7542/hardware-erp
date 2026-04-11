@@ -6,6 +6,7 @@ const productsService = require('./products.service');
 async function listProducts(req, res, next) {
   try {
     const {
+      search,
       category,
       is_active,
       low_stock_only,
@@ -17,6 +18,7 @@ async function listProducts(req, res, next) {
     const parsedLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
 
     const { products, total } = await productsService.getAllProducts({
+      search: search || undefined,
       category: category || undefined,
       isActive: is_active !== undefined ? is_active === 'true' : undefined,
       lowStockOnly: low_stock_only === 'true',
