@@ -102,6 +102,7 @@ export default function BillingPage() {
   const qtyInputRefs = useRef({});
   const rateInputRefs = useRef({});
   const discInputRefs = useRef({});
+  const gstInputRefs = useRef({});
 
   // ───── Keyboard shortcuts ─────
   useEffect(() => {
@@ -209,7 +210,14 @@ export default function BillingPage() {
     }
   };
 
-  const handleDiscKeyDown = (e) => {
+  const handleDiscKeyDown = (e, idx) => {
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      focusAndSelect(gstInputRefs.current[idx]);
+    }
+  };
+
+  const handleGstKeyDown = (e) => {
     if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
       const searchInput = document.querySelector('.billing-product-search input');
@@ -219,11 +227,16 @@ export default function BillingPage() {
 
   // ───── Submit ─────
   const handleSubmit = async () => {
-    if (billType === 'quickbill' && walkinName) {
-      setCustomer({ name: walkinName });
+    // Pass overrides for quickbill to avoid React state batching issues
+    const overrides = {};
+    if (billType === 'quickbill') {
+      overrides.billType = 'quickbill';
+      if (walkinName) {
+        overrides.customer = { name: walkinName };
+      }
     }
 
-    const result = await submitInvoice();
+    const result = await submitInvoice(overrides);
     if (result) {
       // ───── Auto-save changed dynamic prices ─────
       if (autoSavePrices) {
@@ -477,7 +490,7 @@ export default function BillingPage() {
           max={100}
           value={val}
           onChange={(v) => updateItem(idx, 'discount_pct', v || 0)}
-          onKeyDown={handleDiscKeyDown}
+          onKeyDown={(e) => handleDiscKeyDown(e, idx)}
           onFocus={(e) => e.target.select()}
           size="small"
           style={{ width: '100%' }}
@@ -490,12 +503,15 @@ export default function BillingPage() {
       width: 90,
       render: (val, _, idx) => (
         <InputNumber
+          ref={(el) => { gstInputRefs.current[idx] = el; }}
+          className="billing-gst-input"
           size="small"
           min={0}
           max={100}
           step={1}
           value={val}
           onChange={(v) => updateItem(idx, 'gst_pct', v ?? 0)}
+          onKeyDown={handleGstKeyDown}
           onFocus={(e) => e.target.select()}
           style={{ width: '100%' }}
           addonAfter="%"

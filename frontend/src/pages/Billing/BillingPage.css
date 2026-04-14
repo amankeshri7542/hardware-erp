@@ -183,3 +183,6 @@
 .billing-qty-input .ant-input-number-handler-wrap {
   display: none !important;
 }
+.billing-gst-input .ant-input-number-handler-wrap {
+  display: none !important;
+}

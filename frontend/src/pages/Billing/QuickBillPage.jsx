@@ -35,25 +35,22 @@ export default function QuickBillPage() {
       return;
     }
 
-    // Quick bill: full payment required, set amount to match total
-    billing.setPaymentAmount(billing.totals.grand_total);
+    // Build payment and customer overrides to avoid React state batching issues
+    const currentMode = billing.payment.modes[0]?.mode || 'cash';
+    const paymentOverride = {
+      amount_paid: billing.totals.grand_total,
+      modes: [{ mode: currentMode, amount: billing.totals.grand_total, reference_no: '' }],
+      due_date: null,
+    };
+    const customerOverride = walkinName.trim()
+      ? { name: walkinName.trim() }
+      : null;
 
-    // Ensure at least one payment mode is present
-    if (billing.payment.modes.length === 0) {
-      billing.addPaymentMode('cash', billing.totals.grand_total, '');
-    } else {
-      // Update existing mode amount to match grand total
-      const currentMode = billing.payment.modes[0]?.mode || 'cash';
-      billing.removePaymentMode(0);
-      billing.addPaymentMode(currentMode, billing.totals.grand_total, '');
-    }
-
-    // Attach walkin name if provided
-    if (walkinName.trim()) {
-      billing.setCustomer({ name: walkinName.trim() });
-    }
-
-    const result = await billing.submitInvoice();
+    const result = await billing.submitInvoice({
+      payment: paymentOverride,
+      customer: customerOverride,
+      billType: 'quickbill',
+    });
     if (result) {
       setSuccessData(result);
       cleanupRef.current = pollPdfStatus(result.invoice_id, {
@@ -178,8 +175,21 @@ export default function QuickBillPage() {
     {
       title: 'GST%',
       dataIndex: 'gst_pct',
-      width: 60,
+      width: 80,
       align: 'center',
+      render: (val, _, i) => (
+        <InputNumber
+          className="billing-gst-input"
+          min={0}
+          max={100}
+          step={1}
+          value={val}
+          size="small"
+          style={{ width: '100%' }}
+          onChange={(v) => billing.updateItem(i, 'gst_pct', v ?? 0)}
+          onFocus={(e) => e.target.select()}
+        />
+      ),
     },
     {
       title: 'Total',

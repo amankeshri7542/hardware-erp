@@ -112,22 +112,29 @@ export function useBilling(initialBillType = 'retail') {
     setPayment(prev => ({ ...prev, due_date: date }));
   }, []);
 
-  const submitInvoice = useCallback(async () => {
+  const submitInvoice = useCallback(async (overrides = {}) => {
     setErrors({});
+
+    // Allow callers to override state values (avoids React state batching issues)
+    const effCustomer = 'customer' in overrides ? overrides.customer : customer;
+    const effBillType = overrides.billType || billType;
+    const effPayment = overrides.payment || payment;
+    const effBalanceDue = parseFloat((totals.grand_total - effPayment.amount_paid).toFixed(2));
+
     // Validate
     if (items.length === 0) {
       setErrors({ items: 'At least one item required' });
       return null;
     }
-    if (billType !== 'quickbill' && !customer) {
+    if (effBillType !== 'quickbill' && !effCustomer) {
       setErrors({ customer: 'Customer required for retail/wholesale bills' });
       return null;
     }
-    if (billType === 'quickbill' && !customer && balanceDue > 0) {
+    if (effBillType === 'quickbill' && !effCustomer && effBalanceDue > 0) {
       setErrors({ customer: 'Walk-in customers must pay in full. Select or create a customer to allow dues.' });
       return null;
     }
-    if (balanceDue > 0 && !payment.due_date && billType !== 'quickbill') {
+    if (effBalanceDue > 0 && !effPayment.due_date && effBillType !== 'quickbill') {
       setErrors({ due_date: 'Due date required when balance is due' });
       return null;
     }
@@ -135,9 +142,9 @@ export function useBilling(initialBillType = 'retail') {
     setIsSubmitting(true);
     try {
       const payload = {
-        customer_id: customer ? customer.id : null,
-        customer_name_walkin: billType === 'quickbill' ? (customer?.name || null) : null,
-        bill_type: billType,
+        customer_id: effCustomer ? effCustomer.id : null,
+        customer_name_walkin: effBillType === 'quickbill' ? (effCustomer?.name || null) : null,
+        bill_type: effBillType,
         date: new Date().toISOString().split('T')[0],
         items: items.map(item => ({
           product_id: item.product_id,
@@ -157,10 +164,10 @@ export function useBilling(initialBillType = 'retail') {
           } : {}),
         })),
         payment: {
-          amount_paid: payment.amount_paid,
-          modes: payment.modes.length > 0 ? payment.modes :
-            (payment.amount_paid > 0 ? [{ mode: 'cash', amount: payment.amount_paid, reference_no: '' }] : []),
-          due_date: payment.due_date || null,
+          amount_paid: effPayment.amount_paid,
+          modes: effPayment.modes.length > 0 ? effPayment.modes :
+            (effPayment.amount_paid > 0 ? [{ mode: 'cash', amount: effPayment.amount_paid, reference_no: '' }] : []),
+          due_date: effPayment.due_date || null,
         },
       };
       const { data } = await createInvoice(payload);
@@ -175,7 +182,7 @@ export function useBilling(initialBillType = 'retail') {
     } finally {
       setIsSubmitting(false);
     }
-  }, [items, customer, billType, payment, balanceDue]);
+  }, [items, customer, billType, payment, totals.grand_total]);
 
   const resetBilling = useCallback(() => {
     setCustomerState(null);
