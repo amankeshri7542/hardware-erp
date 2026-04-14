@@ -41,6 +41,7 @@ purchasesRouter.use(authenticateJWT);
 purchasesRouter.post('/', createPurchaseSchema, validate, controller.createPurchase);
 purchasesRouter.get('/', controller.listPurchases);
 purchasesRouter.get('/:id', controller.getPurchase);
+purchasesRouter.put('/:id/notes', controller.updatePurchaseNotes);
 purchasesRouter.post('/:id/returns', controller.createPurchaseReturn);
 purchasesRouter.get('/:id/returns', controller.getPurchaseReturns);
 purchasesRouter.post('/:id/invoice', upload.single('invoice'), controller.uploadInvoiceFile);

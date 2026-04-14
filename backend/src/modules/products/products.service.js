@@ -241,8 +241,21 @@ async function updateProduct(id, data, userId) {
 
 /**
  * Soft-delete a product (set is_active = false).
+ * Blocks if the product has any invoice_items (billing history).
  */
 async function softDeleteProduct(id) {
+  // Check for billing history
+  const historyCheck = await pool.query(
+    `SELECT COUNT(*) FROM invoice_items WHERE product_id = $1`,
+    [id],
+  );
+  if (parseInt(historyCheck.rows[0].count, 10) > 0) {
+    const error = new Error('Cannot delete — product has billing history. Deactivate instead.');
+    error.statusCode = 422;
+    error.errorCode = 'PRODUCT_HAS_HISTORY';
+    throw error;
+  }
+
   const { rows } = await pool.query(
     `UPDATE products SET is_active = false, updated_at = NOW()
      WHERE id = $1

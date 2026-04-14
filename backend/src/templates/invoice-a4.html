@@ -230,8 +230,8 @@
 <div class="header">
   <h1>UMA ENTERPRISES</h1>
   <div class="address">{{storeAddress}}</div>
-  <div class="contact">Phone: {{storePhone}} | GSTIN: {{storeGstin}}</div>
-  <div class="title">{{billTypeLabel}}</div>
+  <div class="contact">Phone: {{storePhone}}</div>
+  <div class="title">ROUGH ESTIMATE</div>
 </div>
 
 <!-- ===== INVOICE DETAILS ===== -->
@@ -250,7 +250,6 @@
   <div class="label">Bill To</div>
   <div><strong>{{customerName}}</strong></div>
   {{#SHOW_CUSTOMER_PHONE}}<div>Phone: {{customerPhone}}</div>{{/SHOW_CUSTOMER_PHONE}}
-  {{#SHOW_CUSTOMER_GSTIN}}<div>GSTIN: {{customerGstin}}</div>{{/SHOW_CUSTOMER_GSTIN}}
   {{#SHOW_CUSTOMER_ADDRESS}}<div>Address: {{customerAddress}}</div>{{/SHOW_CUSTOMER_ADDRESS}}
 </div>
 

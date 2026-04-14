@@ -475,6 +475,25 @@ async function getPurchaseReturns(purchaseId) {
   return rows;
 }
 
+/**
+ * Update only the notes field on a purchase.
+ * Items/quantities cannot be edited after stock has been received.
+ */
+async function updatePurchaseNotes(id, notes) {
+  const { rows } = await pool.query(
+    `UPDATE purchases SET notes = $1 WHERE id = $2
+     RETURNING id, po_number, notes`,
+    [notes, id],
+  );
+  if (rows.length === 0) {
+    const error = new Error('Purchase not found');
+    error.statusCode = 404;
+    error.errorCode = 'PURCHASE_NOT_FOUND';
+    throw error;
+  }
+  return rows[0];
+}
+
 async function updatePurchaseInvoiceUrl(id, fileUrl) {
   const { rows } = await pool.query(
     `UPDATE purchases SET invoice_file_url = $1 WHERE id = $2
@@ -492,6 +511,7 @@ module.exports = {
   createPurchaseWithStockIn,
   getPurchases,
   getPurchaseById,
+  updatePurchaseNotes,
   updatePurchaseInvoiceUrl,
   getSupplierProducts,
   getSupplierDebitNotes,

@@ -115,13 +115,8 @@ function processConditionalFlags(html, flags) {
 /**
  * Map bill_type DB value to display label for the PDF header.
  */
-function billTypeLabel(billType) {
-  const map = {
-    retail: 'TAX INVOICE',
-    wholesale: 'TAX INVOICE',
-    quickbill: 'CASH MEMO',
-  };
-  return map[billType] || 'TAX INVOICE';
+function billTypeLabel() {
+  return 'ROUGH ESTIMATE';
 }
 
 /**
@@ -246,7 +241,6 @@ async function generateInvoicePDF(invoiceData, options = {}) {
   // Process conditional flags (before placeholder replacement)
   html = processConditionalFlags(html, {
     SHOW_CUSTOMER_PHONE: !!(invoiceData.customer_phone),
-    SHOW_CUSTOMER_GSTIN: !!(invoiceData.customer_gstin),
     SHOW_CUSTOMER_ADDRESS: !!(invoiceData.customer_address),
     SHOW_BALANCE_DUE: parseFloat(invoiceData.balance_due) > 0,
     SHOW_DISCOUNT_ROW: parseFloat(invoiceData.discount_total) > 0,
@@ -263,14 +257,12 @@ async function generateInvoicePDF(invoiceData, options = {}) {
     storeName: invoiceData.store_name || 'UMA ENTERPRISES',
     storeAddress: invoiceData.store_address || '',
     storePhone: invoiceData.store_phone || '',
-    storeGstin: invoiceData.store_gstin || '',
     invoiceNo: invoiceData.invoice_no || '',
     date: formatDate(invoiceData.invoice_date),
     billType: billTypeMap[invoiceData.bill_type] || invoiceData.bill_type || '',
     billTypeLabel: billTypeLabel(invoiceData.bill_type),
     customerName: invoiceData.customer_name || 'Walk-in Customer',
     customerPhone: invoiceData.customer_phone || '',
-    customerGstin: invoiceData.customer_gstin || '',
     customerAddress: invoiceData.customer_address || '',
     customerBusiness: invoiceData.customer_business || '',
     subtotal: formatCurrency(invoiceData.subtotal),

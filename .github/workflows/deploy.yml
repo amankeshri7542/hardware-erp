@@ -1,44 +1,92 @@
-name: Deploy to Hostinger KVM2
+# Deploy UMA ERP to EC2
+# Trigger: push to main OR manual trigger from GitHub UI
+# Flow: Build frontend on GitHub runner → SCP dist to EC2 → git pull → npm install → pm2 restart
+#
+# Why CI/CD builds frontend: EC2 t2.micro (1 GB RAM) can't run Vite builds.
+# Backend deploys via git pull on server — no build step needed.
+
+name: Deploy to EC2
 
 on:
   push:
     branches: [main]
+  workflow_dispatch: # manual trigger button in GitHub Actions tab
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       # 1. Checkout code
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. SSH into server and deploy
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      # 2. Setup Node.js with npm cache
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      # 3. Install frontend dependencies
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      # 4. Build frontend
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      # 5. Setup SSH key
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key.pem
+          chmod 600 ~/.ssh/ec2_key.pem
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      # 6. Upload frontend dist to EC2
+      - name: Upload frontend build
+        run: |
+          scp -i ~/.ssh/ec2_key.pem -r frontend/dist/ \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/frontend-dist
+
+      # 7. SSH into EC2 and deploy
+      - name: Deploy on EC2
+        run: |
+          ssh -i ~/.ssh/ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'DEPLOY_SCRIPT'
             set -e
 
-            # Pull latest code
+            echo ">>> Pulling latest code"
             cd ~/hardware-ERP
             git pull origin main
 
-            # Write env file from secret (stored as GitHub secret)
-            echo "${{ secrets.BACKEND_ENV }}" > backend/.env
+            echo ">>> Installing backend dependencies"
+            cd hardware-erp/backend
+            npm install --omit=dev
 
-            # Build and restart containers
-            docker compose pull
-            docker compose build --no-cache
-            docker compose up -d --remove-orphans
+            echo ">>> Deploying frontend build"
+            sudo rm -rf /var/www/hardware-erp/frontend/dist/*
+            sudo cp -r ~/frontend-dist/* /var/www/hardware-erp/frontend/dist/
+            sudo chown -R www-data:www-data /var/www/hardware-erp/frontend/dist
 
-            # Cleanup old images
-            docker image prune -f
+            echo ">>> Reloading nginx"
+            sudo nginx -s reload
 
-            # Health check
-            sleep 5
-            curl -sf http://localhost:4000/api/health || exit 1
-            echo "Deployment successful!"
+            echo ">>> Restarting PM2 processes"
+            pm2 restart all --update-env
+
+            echo ">>> Cleaning up"
+            rm -rf ~/frontend-dist
+
+            echo ">>> Deployment complete"
+            pm2 status
+          DEPLOY_SCRIPT
+
+      # 8. Cleanup SSH key from runner
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/ec2_key.pem

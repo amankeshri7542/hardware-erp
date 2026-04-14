@@ -13,13 +13,10 @@ import { getSuppliers } from '../../api/suppliers.api';
 
 const { Text } = Typography;
 
-const UNIT_OPTIONS = [
-  { label: 'Piece', value: 'piece' },
-  { label: 'Kg', value: 'kg' },
-  { label: 'Box', value: 'box' },
-  { label: 'Metre', value: 'metre' },
-  { label: 'Litre', value: 'litre' },
-  { label: 'Set', value: 'set' },
+const UNIT_SUGGESTIONS = [
+  'piece', 'kg', 'gram', 'litre', 'ml', 'metre', 'cm', 'box', 'carton',
+  'dozen', 'bundle', 'bag', 'packet', 'set', 'roll', 'sheet', 'pair',
+  'tin', 'bottle', 'can', 'sack',
 ];
 
 const GST_OPTIONS = [
@@ -186,7 +183,13 @@ export default function ProductFormModal({ open, onClose, onSuccess, productId }
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
             <Form.Item name="unit" label="Unit"
               rules={[{ required: true, message: 'Required' }]}>
-              <Select options={UNIT_OPTIONS} />
+              <AutoComplete
+                options={UNIT_SUGGESTIONS.map(u => ({ value: u }))}
+                placeholder="Type or select unit"
+                filterOption={(input, option) =>
+                  option.value.toLowerCase().includes(input.toLowerCase())
+                }
+              />
             </Form.Item>
 
             <Form.Item name="hsn_code" label="HSN Code">
@@ -259,7 +262,14 @@ export default function ProductFormModal({ open, onClose, onSuccess, productId }
                         name={[name, 'unit_name']}
                         rules={[{ required: true, message: 'Unit name' }]}
                       >
-                        <Select options={UNIT_OPTIONS} placeholder="Alt Unit (e.g. Box)" style={{ width: 140 }} />
+                        <AutoComplete
+                          options={UNIT_SUGGESTIONS.map(u => ({ value: u }))}
+                          placeholder="Alt Unit (e.g. Box)"
+                          style={{ width: 140 }}
+                          filterOption={(input, option) =>
+                            option.value.toLowerCase().includes(input.toLowerCase())
+                          }
+                        />
                       </Form.Item>
                       <Text>=</Text>
                       <Form.Item

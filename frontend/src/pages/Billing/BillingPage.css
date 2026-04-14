@@ -175,3 +175,11 @@
 .billing-product-search .ant-card-body {
   padding: 8px 12px;
 }
+
+/* Remove spinner arrows from Rate and Qty inputs in billing */
+.billing-rate-input .ant-input-number-handler-wrap {
+  display: none !important;
+}
+.billing-qty-input .ant-input-number-handler-wrap {
+  display: none !important;
+}

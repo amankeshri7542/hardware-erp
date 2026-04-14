@@ -9,6 +9,7 @@ import ProductSearch from '../../components/ProductSearch/ProductSearch';
 import { formatINR } from '../../utils/formatCurrency';
 import { pollPdfStatus } from '../../utils/pdfPoller';
 import { openInvoicePdf } from '../../api/invoices.api';
+import './BillingPage.css';
 
 const { Title, Text } = Typography;
 
@@ -145,6 +146,7 @@ export default function QuickBillPage() {
       render: (val, _, i) => (
         <InputNumber
           ref={(el) => { qtyRefs.current[i] = el; }}
+          className="billing-qty-input"
           min={0.001}
           precision={3}
           value={val}
@@ -160,8 +162,18 @@ export default function QuickBillPage() {
       title: 'Rate',
       dataIndex: 'rate',
       width: 100,
-      align: 'right',
-      render: (v) => formatINR(v),
+      render: (val, _, i) => (
+        <InputNumber
+          className="billing-rate-input"
+          min={0}
+          step={0.5}
+          value={val}
+          size="small"
+          style={{ width: '100%' }}
+          onChange={(v) => billing.updateItem(i, 'rate', v || 0)}
+          onFocus={(e) => e.target.select()}
+        />
+      ),
     },
     {
       title: 'GST%',

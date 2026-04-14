@@ -107,6 +107,17 @@ async function getPurchase(req, res, next) {
   }
 }
 
+async function updatePurchaseNotes(req, res, next) {
+  try {
+    const result = await purchasesService.updatePurchaseNotes(
+      req.params.id, req.body.notes || ''
+    );
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ─── SUPPLIER DETAIL HANDLERS ────────────────────────────────────
 
 async function getSupplierProducts(req, res, next) {
@@ -233,6 +244,7 @@ module.exports = {
   createPurchase,
   listPurchases,
   getPurchase,
+  updatePurchaseNotes,
   getSupplierProducts,
   getSupplierDebitNotes,
   createPurchaseReturn,

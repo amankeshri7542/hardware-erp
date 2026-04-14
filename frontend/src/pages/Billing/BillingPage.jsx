@@ -378,6 +378,7 @@ export default function BillingPage() {
       render: (val, _, idx) => (
         <InputNumber
           ref={(el) => { qtyInputRefs.current[idx] = el; }}
+          className="billing-qty-input"
           min={1}
           value={val}
           onChange={(v) => updateItem(idx, 'qty', v || 1)}
@@ -434,6 +435,7 @@ export default function BillingPage() {
           <div style={{ position: 'relative' }}>
             <InputNumber
               ref={(el) => { rateInputRefs.current[idx] = el; }}
+              className="billing-rate-input"
               min={0}
               step={0.5}
               value={val}

@@ -62,8 +62,12 @@ export default function ProductsPage() {
       await deleteProduct(id);
       message.success('Product deactivated');
       fetchProducts();
-    } catch {
-      message.error('Failed to deactivate product');
+    } catch (err) {
+      if (err.response?.status === 422 || err.response?.data?.code === 'PRODUCT_HAS_HISTORY') {
+        message.error(err.response?.data?.error || 'Cannot delete — product has billing history. Deactivate instead.');
+      } else {
+        message.error('Failed to deactivate product');
+      }
     }
   };
 
@@ -122,7 +126,7 @@ export default function ProductsPage() {
         <Space>
           <Button type="text" icon={<EditOutlined />} size="small"
             onClick={() => { setEditProductId(record.id); setModalOpen(true); }} />
-          <Popconfirm title="Deactivate this product?"
+          <Popconfirm title={`Deactivate ${record.name}? It will no longer appear in billing search.`}
             onConfirm={() => handleDelete(record.id)} okText="Yes" cancelText="No">
             <Button type="text" danger icon={<DeleteOutlined />} size="small" />
           </Popconfirm>
