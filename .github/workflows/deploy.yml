@@ -49,18 +49,19 @@ jobs:
       # 6. Upload frontend dist to EC2
       - name: Upload frontend build
         run: |
+          ssh -i ~/.ssh/ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "mkdir -p ~/frontend-dist"
           scp -i ~/.ssh/ec2_key.pem -r frontend/dist/* \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/frontend-dist/
 
       # 7. SSH into EC2 and deploy
       - name: Deploy on EC2
         run: |
-          ssh -i ~/.ssh/ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'DEPLOY_SCRIPT'
+          ssh -i ~/.ssh/ec2_key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << DEPLOY_SCRIPT
             set -e
 
             echo ">>> Pulling latest code"
             cd ~/hardware-ERP
-            git pull origin main
+            git pull https://${{ secrets.GH_USERNAME }}:${{ secrets.GH_PAT }}@github.com/amankeshri7542/hardware-ERP.git main
 
             echo ">>> Installing backend dependencies"
             cd backend
