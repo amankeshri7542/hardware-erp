@@ -231,9 +231,8 @@ export default function BillingPage() {
     const overrides = {};
     if (billType === 'quickbill') {
       overrides.billType = 'quickbill';
-      if (walkinName) {
-        overrides.customer = { name: walkinName };
-      }
+      // Always set customer for quickbill — null clears stale customer state
+      overrides.customer = walkinName.trim() ? { name: walkinName.trim() } : null;
     }
 
     const result = await submitInvoice(overrides);
@@ -371,10 +370,8 @@ export default function BillingPage() {
     {
       title: 'Product',
       dataIndex: 'product_name_snapshot',
-      ellipsis: true,
-      width: '25%',
       render: (name, record) => (
-        <div>
+        <div style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
           <Text strong>{name}</Text>
           {record.hsn_snapshot && (
             <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>

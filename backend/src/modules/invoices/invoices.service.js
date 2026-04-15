@@ -104,8 +104,11 @@ async function createInvoice(data, userId) {
 
     // Step 1: Pre-flight calculations (using resolved base_qty)
     const totals = calculateInvoiceTotals(data.items);
-    const status = determinePaymentStatus(totals.grand_total, data.payment.amount_paid);
-    const balanceDue = parseFloat((totals.grand_total - data.payment.amount_paid).toFixed(2));
+    // Clamp amount_paid so it never exceeds grand_total (prevents negative balance_due)
+    const clampedAmountPaid = Math.min(data.payment.amount_paid, totals.grand_total);
+    data.payment.amount_paid = clampedAmountPaid;
+    const status = determinePaymentStatus(totals.grand_total, clampedAmountPaid);
+    const balanceDue = Math.max(0, parseFloat((totals.grand_total - clampedAmountPaid).toFixed(2)));
 
     // Step 3: Stock validation with FOR UPDATE (locks rows to prevent races)
     const stockFailures = [];
@@ -543,13 +546,16 @@ async function getPresignedPdfUrl(invoiceId) {
 async function processReturn(data, userId) {
   const client = await pool.connect();
   try {
-    // Fetch original invoice
+    await client.query('BEGIN');
+
+    // Fetch original invoice with FOR UPDATE lock
     const origResult = await client.query(
       `SELECT id, invoice_no, customer_id, bill_type, date
-       FROM invoices WHERE id = $1`,
+       FROM invoices WHERE id = $1 FOR UPDATE`,
       [data.original_invoice_id]
     );
     if (origResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       const err = new Error('Original invoice not found');
       err.statusCode = 404;
       err.errorCode = 'INVOICE_NOT_FOUND';
@@ -557,7 +563,7 @@ async function processReturn(data, userId) {
     }
     const original = origResult.rows[0];
 
-    // Fetch original invoice items for validation
+    // Fetch original invoice items for validation (locked via parent invoice FOR UPDATE)
     const origItemsResult = await client.query(
       `SELECT id, product_id, qty, unit, rate, discount_pct, discount_amount,
               gst_pct, cost_price_snapshot, product_name_snapshot, hsn_snapshot,
@@ -569,8 +575,6 @@ async function processReturn(data, userId) {
     for (const oi of origItemsResult.rows) {
       origItemsMap.set(oi.id, oi);
     }
-
-    await client.query('BEGIN');
 
     // Validate and process each returned item
     const returnItems = [];
@@ -720,8 +724,10 @@ async function processReturn(data, userId) {
     }
 
     // Update original invoice's balance_due to reflect the return
+    // NOTE: Do NOT modify grand_total — the credit note already has negative grand_total,
+    // so reports (SUM of grand_total) automatically account for the return.
     const origInvResult = await client.query(
-      'SELECT balance_due, amount_paid, grand_total FROM invoices WHERE id = $1 FOR UPDATE',
+      'SELECT balance_due, amount_paid FROM invoices WHERE id = $1 FOR UPDATE',
       [data.original_invoice_id]
     );
     if (origInvResult.rows.length > 0) {
@@ -729,11 +735,10 @@ async function processReturn(data, userId) {
       const returnAmount = parseFloat(returnGrandTotal.toFixed(2));
       const newBalanceDue = Math.max(0, parseFloat((parseFloat(origInv.balance_due) - returnAmount).toFixed(2)));
       const paidAmt = parseFloat(origInv.amount_paid) || 0;
-      const newGrandTotal = parseFloat((parseFloat(origInv.grand_total) - returnAmount).toFixed(2));
       const newStatus = newBalanceDue <= 0 ? 'paid' : (paidAmt > 0 ? 'partial' : 'unpaid');
       await client.query(
-        `UPDATE invoices SET balance_due = $1, grand_total = $2, status = $3 WHERE id = $4`,
-        [newBalanceDue, newGrandTotal, newStatus, data.original_invoice_id]
+        `UPDATE invoices SET balance_due = $1, status = $2 WHERE id = $3`,
+        [newBalanceDue, newStatus, data.original_invoice_id]
       );
     }
 

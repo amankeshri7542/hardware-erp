@@ -38,7 +38,7 @@ export function useBilling(initialBillType = 'retail') {
       rate: billType === 'wholesale' ? (wholesalePrice || mrp) : mrp,
       discount_pct: 0,
       discount_amount: 0,
-      gst_pct: parseFloat(product.gst_rate) || 0,
+      gst_pct: 0,
       cost_price_snapshot: parseFloat(product.purchase_price) || 0,
     };
     const computed = calculateLineItem(newItem);

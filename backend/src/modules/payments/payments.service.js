@@ -46,7 +46,14 @@ async function recordPayment(data, userId) {
       }
 
       const inv = invResult.rows[0];
-      const newBalanceDue = Math.max(0, parseFloat((parseFloat(inv.balance_due) - data.amount).toFixed(2)));
+      const currentBalance = parseFloat(inv.balance_due) || 0;
+      if (currentBalance <= 0) {
+        throw { statusCode: 422, message: 'Invoice is already fully paid', errorCode: 'INVOICE_ALREADY_PAID' };
+      }
+      if (data.amount > currentBalance) {
+        throw { statusCode: 422, message: `Payment amount (${data.amount}) exceeds balance due (${currentBalance})`, errorCode: 'PAYMENT_EXCEEDS_BALANCE' };
+      }
+      const newBalanceDue = Math.max(0, parseFloat((currentBalance - data.amount).toFixed(2)));
       const newAmountPaid = parseFloat((parseFloat(inv.amount_paid) + data.amount).toFixed(2));
       const newStatus = newBalanceDue === 0 ? 'paid' : 'partial';
 
