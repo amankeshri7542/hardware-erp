@@ -63,7 +63,10 @@ async function getSalesReport({ from, to, billType, customerId, page = 1, limit 
       COALESCE(SUM(amount_paid), 0) AS total_collected,
       COALESCE(SUM(balance_due), 0) AS total_outstanding,
       COALESCE(SUM(profit_amount), 0) AS total_profit,
-      COALESCE(AVG(profit_pct), 0) AS avg_profit_pct
+      CASE WHEN SUM(taxable_total) != 0
+        THEN ROUND((SUM(profit_amount) / SUM(taxable_total) * 100)::numeric, 2)
+        ELSE 0
+      END AS avg_profit_pct
     FROM invoices i
     WHERE i.date >= $1 AND i.date <= $2
       AND ($3::text IS NULL OR i.bill_type = $3)
@@ -328,7 +331,10 @@ async function getProfitReport({ from, to, page = 1, limit = 50 }) {
     SELECT COALESCE(SUM(taxable_total), 0) AS total_revenue,
       COALESCE(SUM(total_cost), 0) AS total_cogs,
       COALESCE(SUM(profit_amount), 0) AS gross_profit,
-      COALESCE(AVG(profit_pct), 0) AS avg_margin_pct
+      CASE WHEN SUM(taxable_total) != 0
+        THEN ROUND((SUM(profit_amount) / SUM(taxable_total) * 100)::numeric, 2)
+        ELSE 0
+      END AS avg_margin_pct
     FROM invoices
     WHERE date >= $1 AND date <= $2
   `;

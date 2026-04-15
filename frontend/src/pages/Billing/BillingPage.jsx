@@ -486,6 +486,7 @@ export default function BillingPage() {
       render: (val, _, idx) => (
         <InputNumber
           ref={(el) => { discInputRefs.current[idx] = el; }}
+          className="billing-disc-input"
           min={0}
           max={100}
           value={val}
@@ -542,60 +543,20 @@ export default function BillingPage() {
     },
   ];
 
-  const kbdStyle = {
-    display: 'inline-block',
-    padding: '1px 6px',
-    border: '1px solid #555',
-    borderRadius: 3,
-    fontFamily: 'monospace',
-    fontSize: 11,
-    fontWeight: 600,
-    color: '#fff',
-    backgroundColor: '#333',
-    marginRight: 4,
-    lineHeight: '18px',
-  };
-
-  const shortcutItemStyle = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    marginRight: 16,
-    fontSize: 12,
-    color: '#ccc',
-  };
-
   return (
     <div className="billing-page">
       {/* Keyboard shortcuts bar */}
-      <div style={{
-        background: '#1f1f1f',
-        padding: '6px 16px',
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        gap: 4,
-        borderBottom: '1px solid #333',
-      }}>
-        <span style={shortcutItemStyle}><span style={kbdStyle}>F2</span> Quick Bill</span>
-        <span style={shortcutItemStyle}><span style={kbdStyle}>F9</span> Finalize</span>
-        <span style={shortcutItemStyle}><span style={kbdStyle}>F4</span> Pay Full</span>
-        <span style={shortcutItemStyle}><span style={kbdStyle}>Esc</span> Clear Bill</span>
-        <span style={shortcutItemStyle}><span style={kbdStyle}>Enter</span> Qty→Rate→Disc→Search</span>
-        <span style={shortcutItemStyle}><span style={kbdStyle}>Ctrl+P</span> Print Last Invoice</span>
-      </div>
-
-      {/* Header */}
-      <div className="billing-header">
-        <Title level={3} style={{ margin: 0 }}>New Bill</Title>
-        <Space>
-          <Tag color={billType === 'quickbill' ? 'orange' : billType === 'wholesale' ? 'blue' : 'green'}>
-            {billType === 'quickbill' ? 'Quick Bill' : billType === 'wholesale' ? 'Wholesale' : 'Retail'}
-          </Tag>
-        </Space>
+      <div className="shortcuts-bar">
+        <span className="shortcut-item"><span className="shortcut-key">F2</span> Quick Bill</span>
+        <span className="shortcut-item"><span className="shortcut-key">F9</span> Finalize</span>
+        <span className="shortcut-item"><span className="shortcut-key">F4</span> Pay Full</span>
+        <span className="shortcut-item"><span className="shortcut-key">Esc</span> Clear</span>
+        <span className="shortcut-item"><span className="shortcut-key">Tab</span> Qty→Rate→Disc→GST→Search</span>
+        <span className="shortcut-item"><span className="shortcut-key">Ctrl+P</span> Print</span>
       </div>
 
       <Row gutter={16} className="billing-body">
-        {/* ═══════ LEFT PANEL (65%) ═══════ */}
+        {/* ═══════ LEFT PANEL ═══════ */}
         <Col xs={24} lg={15} xl={16}>
           {/* Customer section */}
           <Card size="small" className="billing-card">
@@ -613,15 +574,15 @@ export default function BillingPage() {
                   <>
                     {customer ? (
                       <div className="selected-customer">
-                        <Space>
+                        <Space size={4} wrap>
                           <Text strong>{customer.name}</Text>
-                          {customer.business_name && (
-                            <Text type="secondary">({customer.business_name})</Text>
-                          )}
                           {customer.phone && <Text type="secondary">{customer.phone}</Text>}
-                          <Tag color={customer.type === 'wholesale' ? 'blue' : 'green'}>
+                          <Tag color={customer.type === 'wholesale' ? 'blue' : 'green'} style={{ marginRight: 0 }}>
                             {customer.type}
                           </Tag>
+                          {customer.outstanding_balance > 0 && (
+                            <Tag color="red">Due: {formatINR(customer.outstanding_balance)}</Tag>
+                          )}
                           <Button
                             type="link"
                             size="small"
@@ -742,36 +703,33 @@ export default function BillingPage() {
           </Card>
         </Col>
 
-        {/* ═══════ RIGHT PANEL (35%) ═══════ */}
+        {/* ═══════ RIGHT PANEL ═══════ */}
         <Col xs={24} lg={9} xl={8}>
-          {/* Totals card */}
-          <Card size="small" className="billing-card totals-card">
+         <div className="billing-right-panel">
+          {/* Grand total highlight box */}
+          <div className="grand-total-box">
             <div className="totals-row">
-              <Text type="secondary">Subtotal</Text>
-              <Text>{formatINR(totals.subtotal)}</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>Subtotal</Text>
+              <Text style={{ fontSize: 12 }}>{formatINR(totals.subtotal)}</Text>
             </div>
             {totals.discount_total > 0 && (
               <div className="totals-row">
-                <Text type="secondary">Discount</Text>
-                <Text type="danger">-{formatINR(totals.discount_total)}</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>Discount</Text>
+                <Text type="danger" style={{ fontSize: 12 }}>-{formatINR(totals.discount_total)}</Text>
               </div>
             )}
             <div className="totals-row">
-              <Text type="secondary">Taxable</Text>
-              <Text>{formatINR(totals.taxable_total)}</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>GST</Text>
+              <Text style={{ fontSize: 12 }}>{formatINR(totals.gst_total)}</Text>
             </div>
+            <Divider style={{ margin: '6px 0' }} />
             <div className="totals-row">
-              <Text type="secondary">GST</Text>
-              <Text>{formatINR(totals.gst_total)}</Text>
-            </div>
-            <Divider style={{ margin: '8px 0' }} />
-            <div className="totals-row grand-total-row">
-              <Title level={4} style={{ margin: 0 }}>Grand Total</Title>
-              <Title level={4} style={{ margin: 0, color: '#1677ff' }}>
+              <Text strong style={{ fontSize: 16 }}>Grand Total</Text>
+              <Text strong style={{ fontSize: 22, color: '#1677ff' }}>
                 {formatINR(totals.grand_total)}
-              </Title>
+              </Text>
             </div>
-          </Card>
+          </div>
 
           {/* Payment card */}
           <Card size="small" className="billing-card payment-card" title="Payment">
@@ -931,57 +889,62 @@ export default function BillingPage() {
             />
           )}
 
-          {/* Additional Options */}
-          <div style={{ marginBottom: 16 }}>
-            <Checkbox 
-              checked={autoSavePrices} 
-              onChange={(e) => setAutoSavePrices(e.target.checked)}
-            >
-              Automatically save changed rates to Product Master
-            </Checkbox>
-          </div>
-
           {/* Action buttons */}
-          <Space direction="vertical" style={{ width: '100%' }} size="small">
+          <div style={{ marginBottom: 8 }}>
             <Button
               type="primary"
               size="large"
               block
+              className="billing-finalize-btn"
               loading={isSubmitting}
               onClick={handleSubmit}
               disabled={items.length === 0}
-              style={{ height: 48, fontSize: 16, fontWeight: 600 }}
             >
               {isSubmitting ? 'Creating Invoice...' : 'Finalise Bill (F9)'}
             </Button>
-            <Button
-              block
-              danger
-              ghost
-              onClick={() => {
-                if (items.length > 0) {
-                  Modal.confirm({
-                    title: 'Clear bill?',
-                    content: 'All items and payment info will be lost.',
-                    okText: 'Clear',
-                    okType: 'danger',
-                    onOk: () => {
-                      resetBilling();
-                      setWalkinName('');
-                      setPayModeAmount(0);
-                      setPayModeRef('');
-                      setDefaultRates({});
-                      setAutoSavePrices(false);
-                    },
-                  });
-                } else {
-                  resetBilling();
-                }
-              }}
-            >
-              Clear / New Bill
-            </Button>
-          </Space>
+          </div>
+
+          <Row gutter={8} align="middle">
+            <Col flex="auto">
+              <Checkbox
+                checked={autoSavePrices}
+                onChange={(e) => setAutoSavePrices(e.target.checked)}
+                style={{ fontSize: 11 }}
+              >
+                <Text type="secondary" style={{ fontSize: 11 }}>Auto-save rates</Text>
+              </Checkbox>
+            </Col>
+            <Col>
+              <Button
+                size="small"
+                type="text"
+                danger
+                onClick={() => {
+                  if (items.length > 0) {
+                    Modal.confirm({
+                      title: 'Clear bill?',
+                      content: 'All items and payment info will be lost.',
+                      okText: 'Clear',
+                      okType: 'danger',
+                      onOk: () => {
+                        resetBilling();
+                        setWalkinName('');
+                        setPayModeAmount(0);
+                        setPayModeRef('');
+                        setDefaultRates({});
+                        setAutoSavePrices(false);
+                      },
+                    });
+                  } else {
+                    resetBilling();
+                  }
+                }}
+              >
+                Clear Bill
+              </Button>
+            </Col>
+          </Row>
+         </div>
         </Col>
       </Row>
 

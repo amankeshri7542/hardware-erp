@@ -650,7 +650,7 @@ async function processReturn(data, userId) {
     const returnTaxableTotal = returnItems.reduce((sum, i) => sum + i.taxable_amount, 0);
     const returnGstTotal = returnItems.reduce((sum, i) => sum + i.gst_amount, 0);
     const returnGrandTotal = returnItems.reduce((sum, i) => sum + i.line_total, 0);
-    const returnTotalCost = returnItems.reduce((sum, i) => sum + parseFloat((i.cost_price_snapshot * i.qty_returned).toFixed(2)), 0);
+    const returnTotalCost = returnItems.reduce((sum, i) => sum + parseFloat((i.cost_price_snapshot * i.calc_qty).toFixed(2)), 0);
     const returnProfitAmount = parseFloat((returnTaxableTotal - returnTotalCost).toFixed(2));
     const returnProfitPct = returnTaxableTotal > 0
       ? parseFloat(((returnProfitAmount / returnTaxableTotal) * 100).toFixed(2))
@@ -717,6 +717,24 @@ async function processReturn(data, userId) {
         ]
       );
       // balance updated by trigger (fn_sync_customer_outstanding)
+    }
+
+    // Update original invoice's balance_due to reflect the return
+    const origInvResult = await client.query(
+      'SELECT balance_due, amount_paid, grand_total FROM invoices WHERE id = $1 FOR UPDATE',
+      [data.original_invoice_id]
+    );
+    if (origInvResult.rows.length > 0) {
+      const origInv = origInvResult.rows[0];
+      const returnAmount = parseFloat(returnGrandTotal.toFixed(2));
+      const newBalanceDue = Math.max(0, parseFloat((parseFloat(origInv.balance_due) - returnAmount).toFixed(2)));
+      const paidAmt = parseFloat(origInv.amount_paid) || 0;
+      const newGrandTotal = parseFloat((parseFloat(origInv.grand_total) - returnAmount).toFixed(2));
+      const newStatus = newBalanceDue <= 0 ? 'paid' : (paidAmt > 0 ? 'partial' : 'unpaid');
+      await client.query(
+        `UPDATE invoices SET balance_due = $1, grand_total = $2, status = $3 WHERE id = $4`,
+        [newBalanceDue, newGrandTotal, newStatus, data.original_invoice_id]
+      );
     }
 
     await client.query('COMMIT');
