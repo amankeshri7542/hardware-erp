@@ -364,19 +364,21 @@ export default function BillingPage() {
   const columns = [
     {
       title: '#',
-      width: 45,
-      render: (_, __, idx) => idx + 1,
+      width: 36,
+      align: 'center',
+      className: 'col-sno',
+      render: (_, __, idx) => <Text type="secondary">{idx + 1}</Text>,
     },
     {
       title: 'Product',
       dataIndex: 'product_name_snapshot',
+      width: 200,
+      className: 'col-product',
       render: (name, record) => (
-        <div style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
-          <Text strong>{name}</Text>
+        <div className="product-cell">
+          <span className="product-name">{name}</span>
           {record.hsn_snapshot && (
-            <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
-              HSN: {record.hsn_snapshot}
-            </Text>
+            <span className="product-hsn">HSN: {record.hsn_snapshot}</span>
           )}
         </div>
       ),
@@ -384,7 +386,7 @@ export default function BillingPage() {
     {
       title: 'Qty',
       dataIndex: 'qty',
-      width: 90,
+      width: 70,
       render: (val, _, idx) => (
         <InputNumber
           ref={(el) => { qtyInputRefs.current[idx] = el; }}
@@ -402,12 +404,11 @@ export default function BillingPage() {
     {
       title: 'Unit',
       dataIndex: 'unit',
-      width: 110,
+      width: 88,
       render: (baseUnit, record, idx) => {
         const rawConversions = unitConversions[record.product_id];
         const conversions = Array.isArray(rawConversions) ? rawConversions : [];
 
-        // If product has unit conversions, show them; otherwise show all hardware units
         const options = conversions.length > 0
           ? [
               { label: baseUnit, value: baseUnit },
@@ -425,7 +426,6 @@ export default function BillingPage() {
               if (conversions.length > 0) {
                 handleUnitChange(idx, val, record);
               } else {
-                // Simple unit label change — no stock conversion
                 updateItem(idx, 'unit', val);
               }
             }}
@@ -438,7 +438,7 @@ export default function BillingPage() {
     {
       title: 'Rate',
       dataIndex: 'rate',
-      width: 120,
+      width: 100,
       render: (val, _, idx) => {
         const isEdited = defaultRates[idx] !== undefined && val !== defaultRates[idx];
         return (
@@ -457,29 +457,16 @@ export default function BillingPage() {
               formatter={(v) => `${v}`}
             />
             {isEdited && (
-              <span
-                title={`Default: ${formatINR(defaultRates[idx])}`}
-                style={{
-                  position: 'absolute',
-                  top: -2,
-                  right: -2,
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  backgroundColor: '#faad14',
-                  display: 'inline-block',
-                  zIndex: 1,
-                }}
-              />
+              <span className="rate-edited-dot" title={`Default: ${formatINR(defaultRates[idx])}`} />
             )}
           </div>
         );
       },
     },
     {
-      title: 'Disc%',
+      title: 'D%',
       dataIndex: 'discount_pct',
-      width: 80,
+      width: 62,
       render: (val, _, idx) => (
         <InputNumber
           ref={(el) => { discInputRefs.current[idx] = el; }}
@@ -498,7 +485,7 @@ export default function BillingPage() {
     {
       title: 'GST%',
       dataIndex: 'gst_pct',
-      width: 90,
+      width: 62,
       render: (val, _, idx) => (
         <InputNumber
           ref={(el) => { gstInputRefs.current[idx] = el; }}
@@ -512,9 +499,6 @@ export default function BillingPage() {
           onKeyDown={handleGstKeyDown}
           onFocus={(e) => e.target.select()}
           style={{ width: '100%' }}
-          addonAfter="%"
-          formatter={(v) => `${v}`}
-          parser={(v) => v?.replace('%', '') ?? 0}
         />
       ),
     },
@@ -527,7 +511,8 @@ export default function BillingPage() {
     },
     {
       title: '',
-      width: 40,
+      width: 36,
+      align: 'center',
       render: (_, __, idx) => (
         <Button
           type="text"
@@ -535,6 +520,7 @@ export default function BillingPage() {
           size="small"
           icon={<DeleteOutlined />}
           onClick={() => removeItem(idx)}
+          style={{ padding: '0 4px' }}
         />
       ),
     },
@@ -554,7 +540,7 @@ export default function BillingPage() {
 
       <Row gutter={16} className="billing-body">
         {/* ═══════ LEFT PANEL ═══════ */}
-        <Col xs={24} lg={15} xl={16}>
+        <Col xs={24} lg={16} xl={17}>
           {/* Customer section */}
           <Card size="small" className="billing-card">
             <Row gutter={12} align="middle">
@@ -694,14 +680,15 @@ export default function BillingPage() {
               rowKey={(record, idx) => `${record.product_id || 'item'}-${idx}`}
               pagination={false}
               size="small"
-              scroll={{ y: 'calc(100vh - 520px)' }}
-              locale={{ emptyText: 'No items added yet. Search for a product above.' }}
+              scroll={{ x: 820, y: 'calc(100vh - 420px)' }}
+              locale={{ emptyText: 'No items added. Search a product above.' }}
+              className="billing-table"
             />
           </Card>
         </Col>
 
         {/* ═══════ RIGHT PANEL ═══════ */}
-        <Col xs={24} lg={9} xl={8}>
+        <Col xs={24} lg={8} xl={7}>
          <div className="billing-right-panel">
           {/* Grand total highlight box */}
           <div className="grand-total-box">

@@ -134,7 +134,10 @@ export default function QuickBillPage() {
     {
       title: 'Product',
       dataIndex: 'product_name_snapshot',
-      ellipsis: true,
+      width: 200,
+      render: (name) => (
+        <span style={{ fontWeight: 600, fontSize: 13 }}>{name}</span>
+      ),
     },
     {
       title: 'Qty',
