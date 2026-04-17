@@ -1,12 +1,15 @@
 # Frontend — React Application
 
+> Last updated: 2026-04-17
+
 ## Stack
 - **React 18** (functional components + hooks)
 - **Ant Design 5** — the ONLY UI library. Do not introduce Tailwind, shadcn, Material UI
-- **React Router 6** — client-side routing
-- **Zustand** — auth state only
-- **Vite** — build tool (must build locally, not on t2.micro EC2)
+- **React Router 6** — client-side routing (28 routes)
+- **Zustand** — auth state + billing draft persistence
+- **Vite** — build tool (must build locally on Mac, not on t2.micro EC2)
 - **dayjs** — date handling (used with Ant Design DatePicker)
+- **Axios** — HTTP client with JWT interceptors
 
 ## Routes (App.jsx)
 
@@ -15,7 +18,7 @@
 | `/login` | LoginPage | No |
 | `/dashboard` | DashboardPage | Yes |
 | `/billing` | BillingPage | Yes |
-| `/billing/quick` | BillingPage (quick mode) | Yes |
+| `/billing/quick` | QuickBillPage | Yes |
 | `/invoices` | InvoicesPage | Yes |
 | `/invoices/:id` | InvoiceDetailPage | Yes |
 | `/customers` | CustomersPage | Yes |
@@ -34,35 +37,41 @@
 | `/reports/gst` | GstReportPage | Yes |
 | `/reports/stock` | StockReportPage | Yes |
 | `/reports/stock-movement` | StockMovementPage | Yes |
-| `/reports/customer-dues` | CustomerDuesPage | Yes |
+| `/reports/dues` | CustomerDuesPage | Yes |
 | `/reports/profit` | ProfitReportPage | Yes |
 | `/reports/collections` | CollectionsReportPage | Yes |
 | `/settings` | SettingsPage | Yes |
 
 ## State Management
 
-### Auth Store (Zustand — `store/authStore.js`)
+### Auth Store (`store/authStore.js` — Zustand)
 ```
 State:  accessToken, user, isAuthenticated, isInitializing
 Actions: login(token, user), logout(), setToken(token), initialize()
 ```
-- `initialize()` called on app mount — attempts refresh token to restore session
+- `initialize()` called on app mount — attempts refresh token, fallback to localStorage
 - On 401 response: axios interceptor calls `logout()` + redirects to `/login`
-- Token stored in memory only (not localStorage)
+- Token persisted in localStorage (`erp_token`, `erp_user`) as HTTP-only fallback
+
+### Billing Store (`store/billingStore.js` — Zustand with persistence)
+- Persists billing draft to localStorage (`hardware-erp-billing-draft`)
+- State: `draftItems, draftCustomer, draftBillType, draftPayment`
+- Strips `cost_price_snapshot` before persisting (security)
+- Methods: `saveDraft()`, `clearDraft()`
 
 ### Local State
-All page-level state uses `useState`/`useReducer`. No Redux, no React Query.
+All page-level state uses `useState`/`useCallback`. No Redux, no React Query.
 
 ## Key Hooks
 
 ### useBilling (`hooks/useBilling.js`)
 Central hook for the billing page. Manages:
-- **Customer:** `customer`, `setCustomer` — auto-sets bill type based on customer type
+- **Customer:** `customer`, `setCustomer` — auto-sets bill type based on customer.type
 - **Bill type:** `billType`, `setBillType` — 'retail' | 'wholesale' | 'quickbill'
-- **Items:** `items`, `addItem(product)`, `updateItem(index, field, value)`, `removeItem(index)`
-- **Payment:** `payment`, `setPaymentAmount`, `addPaymentMode`, `removePaymentMode`
-- **Totals:** Computed via `useMemo` using `billing.calculations.js`
-- **Submit:** `submitInvoice()` → validates → POST /api/invoices → returns invoice or null
+- **Items:** `items`, `addItem(product)`, `updateItem(idx, field, value)`, `updateItemFields(idx, fields)`, `removeItem(idx)`
+- **Payment:** `payment`, `setPaymentAmount`, `addPaymentMode`, `removePaymentMode`, `setDueDate`
+- **Totals:** Computed via `billing.calculations.js` — subtotal, discount_total, taxable_total, gst_total, grand_total, total_profit, profit_pct
+- **Submit:** `submitInvoice(overrides)` → validates → POST /api/invoices → returns invoice or null
 - **Reset:** `resetBilling()` — clears all state
 
 ### useProductSearch (`hooks/useProductSearch.js`)
@@ -70,6 +79,10 @@ Central hook for the billing page. Manages:
 - **Barcode search:** Instant lookup (no debounce)
 - Adds `stock_status` and `display_price` to results
 - Returns: `{ query, setQuery, results, isLoading, searchByBarcode }`
+
+### useKeyboardBilling (`hooks/useKeyboardBilling.js`)
+- Registers keyboard shortcuts for billing page
+- Ignores when Ant Design modal is open (checks `.ant-modal-root`)
 
 ## Billing Page — Keyboard-First UX
 
@@ -82,19 +95,20 @@ Central hook for the billing page. Manages:
 | Esc | Clear bill |
 | Ctrl+P | Print last invoice PDF |
 
-### Field Navigation (Enter/Tab progresses)
+### Field Navigation (Tab/Enter progresses)
 ```
 Customer Search → Product Search → [select product] →
-Qty → Enter → Rate → Enter → Disc% → Enter → Product Search (loop)
+Qty → Rate → Discount% → GST% → Product Search (loop)
 ```
 
-### Refs & Focus
-- `qtyInputRefs` / `rateInputRefs` / `discInputRefs` — per-row InputNumber refs
-- `focusAndSelect()` helper — focuses Ant Design InputNumber and selects text
+### Unit Conversion in Billing
+- When product has unit conversions, unit dropdown shows base unit + alt units
+- Selecting alt unit (e.g., "box") auto-fills: `alt_qty`, `alt_unit`, `base_qty = alt_qty × conversion_value`
+- Rate adjusts to per-alt-unit price (e.g., rate per box)
 
 ## Billing Calculations (`utils/billing.calculations.js`)
 
-**Must stay in sync with backend `invoices.service.js`.**
+**Must stay in sync with backend `invoices.service.js`.** This is Absolute Rule #4.
 
 ### Exported Functions
 1. **`calculateLineItem(item)`** — Computes discount_amount, taxable_amount, gst_amount, line_total, line_profit
@@ -104,15 +118,15 @@ Qty → Enter → Rate → Enter → Disc% → Enter → Product Search (loop)
 
 ### Formulas
 ```
-discount_amount = rate * (discount_pct / 100)
-taxable_amount  = (rate - discount_amount) * qty
-gst_amount      = taxable_amount * (gst_pct / 100)
+discount_amount = rate × (discount_pct / 100)
+taxable_amount  = (rate - discount_amount) × qty
+gst_amount      = taxable_amount × (gst_pct / 100)
 line_total      = taxable_amount + gst_amount
-line_profit     = (rate - discount_amount - cost_price_snapshot) * qty
+line_profit     = (rate - discount_amount - cost_price_snapshot) × qty
 
-Invoice:
+Invoice totals:
 grand_total = taxable_total + gst_total
-profit_pct  = (profit_amount / taxable_total) * 100
+profit_pct  = (profit_amount / taxable_total) × 100
 ```
 
 ## API Layer (`api/axios.js`)
@@ -123,49 +137,80 @@ withCredentials: true  // for httpOnly refresh cookie
 ```
 
 **Request interceptor:** Attaches `Authorization: Bearer <token>` from Zustand store.
-**Response interceptor:** On 401 → `logout()` + redirect to `/login`.
+**Response interceptor:** On 401 (except /auth/refresh) → `logout()` + redirect to `/login`.
 
 **WARNING:** Empty string `VITE_API_URL=""` is truthy in JS — the `||` fallback won't trigger. Set it to a real URL or omit it entirely.
 
-## API Files
-Each module has a dedicated API file:
-- `api/auth.api.js` — login, logout, refreshToken
-- `api/products.api.js` — CRUD, search, stock ledger, price history
-- `api/customers.api.js` — CRUD, search, ledger, summary
-- `api/invoices.api.js` — create, list, detail, PDF, return
-- `api/payments.api.js` — record, list
-- `api/purchases.api.js` — create, list, detail, returns
-- `api/suppliers.api.js` — CRUD
-- `api/reports.api.js` — all report data + exports
-- `api/settings.api.js` — get settings
+### API Files (one per module)
+- `auth.api.js` — login, logout, refreshToken
+- `products.api.js` — CRUD, search, stock ledger, price history, unit conversions, suppliers
+- `customers.api.js` — CRUD, search, ledger, summary
+- `invoices.api.js` — create, list, detail, PDF status/download, return, regenerate
+- `payments.api.js` — record, list by customer/invoice
+- `purchases.api.js` — create, list, detail, returns, invoice upload/download
+- `suppliers.api.js` — CRUD, products, debit-notes
+- `dashboard.api.js` — summary, sales-overview, overdue, activity, payment-modes
+- `reports.api.js` — all 7 reports + categories + export (blob download)
+- `settings.api.js` — get settings
 
 ## Components
 
 ### AppLayout (`components/AppLayout.jsx`)
-- Collapsible sidebar with 9 menu items: Dashboard, Billing, Invoices, Customers, Products, Purchases, Suppliers, Reports, Settings
-- Header: user name + logout button
+- Collapsible sidebar: Dashboard, Billing, Invoices, Customers, Products, Purchases, Suppliers, Reports, Settings
+- Header: menu toggle + PWA install button + user name + logout
 - Footer: "UMA Enterprises v1.0"
-- Active menu based on pathname prefix
 
 ### PrivateRoute (`components/PrivateRoute.jsx`)
 Auth guard — redirects to `/login` if not authenticated.
 
+### PWAInstallButton (`components/PWAInstallButton.jsx`)
+- Listens for `beforeinstallprompt` event, shows Download icon button when installable
+- Requires HTTPS + service worker (not active on HTTP)
+
 ### ProductSearch / CustomerSearch
-Reusable search dropdowns with debounce. Used in billing page and other forms.
+Reusable autocomplete dropdowns with debounce, arrow-key navigation, Enter to select.
+- ProductSearch: shows name, SKU, stock status, display price
+- CustomerSearch: shows name, business, phone, type tag, outstanding balance
+
+### PaymentModal / ReturnModal / PurchaseReturnModal
+Modal dialogs for recording payments, processing sales returns, and purchase returns.
+
+### PriceHistoryChart
+SVG line chart showing purchase_price, wholesale_price, MRP over time.
 
 ### ReportLayout (`components/Reports/ReportLayout.jsx`)
-Standard report page layout: title, export button, filters, summary cards, data table.
+Standard report page wrapper: title, export button, filters card, summary, spinning table.
+
+## Key Page Behaviors
+
+### Products Page
+- Stock column shows base quantity + unit (e.g., "442 piece")
+- Below shows box equivalent from unit_conversions (e.g., "36 box + 10 piece")
+- Low-stock items highlighted in red with warning icon
+
+### Product Detail Page
+- Stock card shows conversion breakdown (e.g., "10 Box + 4 Pcs")
+- Shows conversion label (e.g., "1 box = 12 piece")
+- Tabs: Stock Ledger, Price History, Unit Conversions, Suppliers
+
+### Invoice Detail Page
+- Items table includes alt_qty, alt_unit, base_qty columns when present
+- Return modal validates against `qty_returned` to prevent duplicate returns
+
+### Dashboard Page
+- Auto-refresh every 60 seconds
+- 5 summary cards, recent activity, payment mode chart, overdue table
 
 ## Formatting (`utils/formatCurrency.js`)
-
 ```js
 formatINR(amount)   → "₹1,234.56" (en-IN locale)
 formatDate(dateStr) → "DD-MM-YYYY" or '—' if empty
 ```
 
 ## Key Frontend Conventions
-- All DB field names used as-is (snake_case) in frontend — no camelCase mapping
-- Invoice detail returns flat customer fields: `customer_name`, `customer_phone`, `customer_gstin` (not nested `customer.name`)
+- All DB field names used as-is (snake_case) — no camelCase mapping
+- Invoice detail returns flat customer fields: `customer_name`, `customer_phone` (not nested)
 - Invoice status field is `status` (not `payment_status`)
 - Payment date field is `payment_date` (not `date`)
-- PDF is never exposed to customer — only purchase_price, profit, cost are hidden from PDFs
+- PDF never exposes purchase_price, profit, or cost to customers
+- PWA manifest at `public/manifest.json` — needs HTTPS + service worker to activate

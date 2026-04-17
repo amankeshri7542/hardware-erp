@@ -1,183 +1,133 @@
 # Architecture
 
+> Last updated: 2026-04-17
+
 ## System Overview
 
-UMA Enterprises ERP — single-location hardware shop management system for a medium-level store in Bihar, India. Handles retail & wholesale billing, inventory, customer ledgers, payments, PDF invoices, GST reports, and Excel exports. Designed for ~100-150 invoices/day, 2-3 concurrent users.
+Single-location hardware shop ERP in Bihar, India. ~100-150 invoices/day, 2-3 users.
+
+```
+Browser (React SPA)
+    │ HTTP :80
+    ▼
+Nginx (reverse proxy + static files)
+    ├── /* static  →  /var/www/hardware-erp/frontend/dist/
+    └── /api/*     →  Express.js :4000 (PM2: erp-api)
+                            │
+                    ┌───────┼───────┐
+                    ▼       ▼       ▼
+                PostgreSQL  Redis   S3
+                (RDS)     (BullMQ) (PDFs)
+                                    ▲
+                            PDF Worker (PM2: erp-pdf-worker)
+                            Puppeteer → S3 upload
+```
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| **Backend** | Node.js 18 + Express 4 |
-| **Frontend** | React 18 + Ant Design 5 + Vite |
-| **Database** | PostgreSQL 15 (AWS RDS) |
-| **PDF Generation** | Puppeteer + BullMQ (Redis queue) |
-| **File Storage** | AWS S3 (`uma-erp-storage` bucket) |
-| **Process Manager** | PM2 (api + pdf-worker processes) |
-| **Web Server** | nginx (reverse proxy + static files) |
-| **State Management** | Zustand (auth only) |
-| **Excel Exports** | ExcelJS (server-side streaming) |
+| Frontend | React 18 + Ant Design 5 + Zustand |
+| Backend | Express.js 4.18 + Helmet + express-rate-limit |
+| Database | PostgreSQL 15 (AWS RDS, ap-south-1) |
+| Queue | BullMQ + Redis (ioredis) |
+| PDF | Puppeteer 22 (headless Chrome) |
+| Storage | AWS S3 v3 SDK (`uma-erp-storage`) |
+| Auth | JWT + bcrypt (cost 12) |
+| Excel | ExcelJS 4.4 (server-side only) |
+| Process | PM2 (2 processes: erp-api, erp-pdf-worker) |
+| Proxy | Nginx |
 
 ## Infrastructure
 
+| Component | Details |
+|-----------|---------|
+| EC2 | t2.micro, ap-south-1, Ubuntu 24.04, Elastic IP 13.204.240.166 |
+| RDS | PostgreSQL 15, db.t3.micro, single-AZ |
+| S3 | `uma-erp-storage`, private, pre-signed URLs (1hr) |
+| SSL | **None yet** — HTTP only. Needs domain + Let's Encrypt |
+
+## Backend Module Pattern
+
+Every module follows:
 ```
-[Browser] → [nginx :80]
-               ├─ /       → /var/www/hardware-erp/frontend/dist/ (React SPA)
-               └─ /api/*  → proxy_pass http://127.0.0.1:4000 (Express)
-                               ├─ erp-api (PM2, port 4000)
-                               └─ erp-pdf-worker (PM2, BullMQ consumer)
-
-[Express] → [PostgreSQL RDS] (ap-south-1)
-          → [S3 uma-erp-storage] (PDF invoices)
-          → [Redis] (BullMQ PDF queue, optional)
-```
-
-**Server:** EC2 t2.micro, Ubuntu 22.04, ap-south-1 (Mumbai)
-**IP:** 13.204.240.166
-**RDS Host:** hardware-erp-db.cf8m0m4624nq.ap-south-1.rds.amazonaws.com
-
-## Backend Architecture
-
-### Module Pattern
-
-Every module follows this convention:
-
-```
-backend/src/modules/{name}/
-├── {name}.router.js        # Route definitions only
-├── {name}.controller.js    # Request/response handling — no business logic
-├── {name}.service.js       # All business logic + DB queries
+modules/{name}/
+├── {name}.router.js        # Route definitions + middleware
+├── {name}.controller.js    # Parse req → call service → send res
+├── {name}.service.js       # Business logic + DB queries (parameterized)
 └── {name}.validation.js    # express-validator schemas
 ```
 
-**Rule:** Controllers never touch the database. Services never touch `req`/`res`.
+**11 modules:** auth, products, customers, invoices, payments, purchases, suppliers, reports, exports, dashboard, settings
 
-### Modules
-
-| Module | Responsibility |
-|--------|---------------|
-| `auth` | Login, logout, JWT refresh |
-| `products` | CRUD, fuzzy search (pg_trgm), barcode lookup, stock ledger, price history, unit conversions, supplier links |
-| `customers` | CRUD, phone search, ledger, outstanding summary |
-| `invoices` | Billing (create invoice), returns, PDF generation, status tracking |
-| `payments` | Record payments (single/mixed mode), link to invoices |
-| `purchases` | Purchase orders, stock-in, purchase returns, debit notes |
-| `suppliers` | Supplier CRUD, linked products, debit notes |
-| `reports` | 8 report types (data queries) + Excel exports |
-| `dashboard` | Summary stats, overdue invoices, sales overview |
-| `settings` | Store configuration (key-value) |
-
-### Request Flow
-
+### Request Pipeline
 ```
-Request → nginx → Express middleware chain:
-  1. CORS
-  2. JSON body parser
-  3. Rate limiter (express-rate-limit)
-  4. authenticateJWT (except /auth/login, /health)
-  5. Router → Controller → Service → PostgreSQL
-  6. Response or errorHandler middleware
+Request → Helmet → CORS → Cookie Parser → JWT Auth → Validation → Controller → Service → DB → Response
 ```
 
-### Transaction Pattern
+Login endpoint has rate limiting: 5 attempts per 15 minutes per IP.
 
-Critical operations use PostgreSQL transactions:
+## Invoice Creation Flow (10-Step Atomic Transaction)
 
-```js
-const client = await pool.connect();
-try {
-  await client.query('BEGIN');
-  // ... multiple queries via client.query()
-  await client.query('COMMIT');
-} catch (err) {
-  await client.query('ROLLBACK');
-  throw err;
-} finally {
-  client.release();
-}
+```
+BEGIN
+  1. Calculate totals (pure function, no side effects)
+  2. Resolve unit conversions (alt_unit → base_qty via product_unit_conversions)
+  3. Lock products (SELECT ... FOR UPDATE — prevents race conditions)
+  4. Validate stock availability (fail fast if insufficient)
+  5. INSERT invoice header (auto-numbering: RETAIL-2026-00001)
+  6. INSERT invoice_items (cost_price_snapshot frozen here)
+  7. UPDATE products.current_stock (decrement by base_qty or qty)
+  8. INSERT stock_ledger (movement_type = 'out', append-only)
+  9. INSERT customer_ledger DEBIT (invoice amount)
+  10. INSERT payment + customer_ledger CREDIT (amount paid)
+COMMIT
+  → Queue async PDF generation via BullMQ
 ```
 
-Used in: invoice creation, payment recording, purchase stock-in, returns, stock adjustments.
+Any failure → full ROLLBACK. No partial invoices.
 
-### PDF Pipeline
+## PDF Generation Pipeline
 
-**Primary (async):** Invoice created → BullMQ job queued → Worker picks up → Puppeteer renders HTML template → Upload to S3 → Update `pdf_status = 'ready'`
+```
+Invoice Created → BullMQ Queue → PDF Worker (separate process)
+  → Fetch invoice + items from DB
+  → Render HTML template (invoice-a4.html or invoice-thermal.html)
+  → Puppeteer: HTML → PDF buffer
+  → Upload to S3
+  → UPDATE invoices SET pdf_status='ready', pdf_url=s3_key
+Frontend polls /invoices/:id/pdf-status every 2s
+When ready → /invoices/:id/pdf → pre-signed S3 URL (1hr expiry)
+```
 
-**Fallback (sync):** If Redis unavailable, `generatePdfDirect()` runs in the API process using local file storage (`local://path` prefix).
+Templates support alt_qty display: "2 Box (24 Pcs)" format in Qty column.
+Fallback: if Redis unavailable, generates PDF synchronously in API process.
 
-**Download:** S3 PDFs → 302 redirect to pre-signed URL (1hr). Local PDFs → `sendFile()` stream.
+## Unit Conversion System
+
+Products have base unit (e.g., `piece`) + optional conversions (e.g., `1 box = 12 pieces`).
+
+- **Storage:** Always base units in `current_stock` and `stock_ledger`
+- **Billing:** User selects unit in dropdown → `base_qty = alt_qty × conversion_value`
+- **Invoice items:** Stores `qty`, `alt_qty`, `alt_unit`, `base_qty`
+- **PDF:** Shows "2 Box (24 Pcs)" when alt_unit present
+- **Products list/detail:** Shows base stock + box equivalent
+
+## Sales Returns (Credit Notes)
+
+- Creates new invoice with **negative** `grand_total`
+- `SUM(grand_total)` in reports automatically accounts for returns
+- Stock restored via stock_ledger (movement_type = 'return_in')
+- `invoice_items.qty_returned` tracks cumulative returns per line
+- Prevents duplicate returns: `requested + already_returned ≤ original_qty`
+- Only reduces `balance_due` on original, never modifies `grand_total`
 
 ## Frontend Architecture
 
-### Stack
-- **React 18** with functional components + hooks
-- **Ant Design 5** — the only UI library (no Tailwind, Material, shadcn)
-- **React Router 6** — client-side routing with SPA fallback via nginx
-- **Zustand** — auth state only (token + user in memory)
-- **Vite** — build tool (cannot build on t2.micro, must build locally)
-
-### State Strategy
-- **Global (Zustand):** Auth token, user info — in-memory only
-- **Local (useState/useReducer):** All page-level state — billing, search, modals
-- **Custom hooks:** `useBilling` (billing form state + calculations), `useProductSearch` (debounced search)
-
-### API Layer
-Single axios instance (`api/axios.js`):
-- `baseURL: import.meta.env.VITE_API_URL || '/api'`
-- Request interceptor: attaches Bearer token
-- Response interceptor: 401 → logout + redirect to `/login`
-- `withCredentials: true` for httpOnly refresh cookie
-
-### Key Pages
-| Route | Page | Purpose |
-|-------|------|---------|
-| `/dashboard` | DashboardPage | Summary stats, charts, alerts |
-| `/billing` | BillingPage | Invoice creation (keyboard-first) |
-| `/invoices` | InvoicesPage | Invoice list + filters |
-| `/invoices/:id` | InvoiceDetailPage | Full invoice view + PDF |
-| `/customers` | CustomersPage | Customer list + CRUD |
-| `/customers/:id` | CustomerDetailPage | Ledger, outstanding, invoices |
-| `/products` | ProductsPage | Product list + CRUD |
-| `/products/:id` | ProductDetailPage | Stock ledger, price history |
-| `/purchases` | PurchasesPage | Purchase order list |
-| `/purchases/new` | NewPurchasePage | Create purchase + stock-in |
-| `/reports/*` | 7 report pages | Sales, GST, stock, profit, etc. |
-
-## Data Flow: Invoice Creation
-
-This is the most critical flow in the system:
-
-```
-1. BillingPage (frontend)
-   └─ useBilling hook manages items, customer, payment
-   └─ billing.calculations.js computes totals (client-side)
-   └─ submitInvoice() → POST /api/invoices
-
-2. invoices.controller.createInvoice
-   └─ Validates request body
-   └─ Calls invoices.service.createInvoice(data, userId)
-
-3. invoices.service.createInvoice (SINGLE TRANSACTION)
-   └─ BEGIN
-   └─ Lock product rows (SELECT ... FOR UPDATE)
-   └─ Validate stock availability
-   └─ INSERT invoice (trigger auto-generates invoice_no)
-   └─ INSERT invoice_items (with cost_price_snapshot)
-   └─ UPDATE products.current_stock (decrement)
-   └─ INSERT stock_ledger entries (movement_type = 'out')
-   └─ INSERT customer_ledger debit (trigger syncs outstanding)
-   └─ INSERT payment + payment_modes_detail (if paid)
-   └─ INSERT customer_ledger credit (if paid)
-   └─ COMMIT
-
-4. Queue PDF job (async, never rolls back invoice on failure)
-
-5. Frontend polls GET /api/invoices/:id/pdf-status every 2s
-```
-
-## File Storage
-
-- **S3 bucket:** `uma-erp-storage` (private, ap-south-1)
-- **Objects:** PDF invoices stored by invoice ID
-- **Access:** Pre-signed URLs with 1-hour expiry
-- **Fallback:** Local filesystem under `pdf-output/` when S3 unavailable
+- SPA served by nginx, all non-API routes → index.html
+- 28 routes in React Router v6
+- Zustand for auth state only (token + user in memory)
+- Ant Design 5 for ALL UI components — no other CSS frameworks
+- Keyboard-first billing: F2=QuickBill, F4=PayFull, F9=Submit, Esc=Clear
+- PWA manifest present (needs HTTPS + service worker to activate)
+- Billing calculations in `utils/billing.calculations.js` must match backend

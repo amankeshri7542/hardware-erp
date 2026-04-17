@@ -1,95 +1,114 @@
-# Known Issues & Technical Debt
+# Known Issues, TODOs & Future Enhancements
 
-Last updated: 2026-04-11
+> Last updated: 2026-04-17
 
-## Infrastructure Issues
+## Critical — Must Fix Before Real Customer Data
 
 ### No HTTPS
-- Site runs on HTTP only at `http://13.204.240.166`
-- Needs: domain name + Let's Encrypt cert + nginx SSL config
-- **Priority:** High — refresh token cookie `secure: false` is a workaround; set to `true` once HTTPS is live
+- **Risk:** All data in plaintext, cookies interceptable, JWT tokens exposed
+- **Fix:** Buy domain → Let's Encrypt certbot → update nginx.conf
+- **Impact:** Also blocks PWA installation (needs HTTPS + service worker)
 
-### No Redis/ElastiCache
-- BullMQ PDF queue falls back to direct Puppeteer in API process
-- Redis ECONNREFUSED errors in PM2 logs (expected — app handles gracefully)
-- PDF generation now works via `generatePdfDirect()` fallback using Google Chrome
-- **Fix:** Install Redis on server (`sudo apt install redis-server`) for proper async queue
+### Weak JWT Secrets
+- **Risk:** Token forgery if secret is guessable
+- **Fix:** `openssl rand -hex 32` → update both `JWT_SECRET` and `JWT_REFRESH_SECRET` in `.env`
 
-### Puppeteer / PDF on EC2
-- Fixed: Google Chrome installed at `/usr/bin/google-chrome-stable`
-- `PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable` set in backend `.env`
-- `--disable-gpu`, `--no-zygote` flags added to pdf.js for headless service context
-- Old `chromium-browser` snap wrapper removed from env
+### Cookie `secure: false`
+- **Risk:** Refresh token sent over HTTP
+- **Fix:** Set `secure: true` in cookie options after HTTPS is enabled
 
-### EC2 t2.micro Limitations
-- Cannot run `npm run build` (Vite) — out of memory
-- Must build frontend locally on Mac and SCP dist to server
-- **Fix:** Move to KVM2 or set up GitHub Actions CI/CD
+### DB SSL `rejectUnauthorized: false`
+- **Risk:** Man-in-the-middle on DB connection
+- **Fix:** Download AWS RDS CA certificate, enable validation in `config/db.js`
 
-## Security Issues
+## High Priority
 
-### No HTTPS (repeat — high priority)
-- JWT tokens travel in plaintext on HTTP
-- Refresh token cookie set with `secure: false` (workaround for HTTP)
+### No CSRF Protection
+- **Risk:** Cross-site request forgery attacks
+- **Fix:** Add `csurf` middleware or set `SameSite=Strict` on refresh token cookie
 
-### Credentials in `.env`
-- `.env` is gitignored but was accidentally shown in terminal output
-- GitHub PAT `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` — **rotate immediately**
-- JWT_SECRET is a JWT token (not a random secret) — regenerate with `node -e "require('crypto').randomBytes(64).toString('hex')"`
-- AWS IAM keys in `.env` — ensure IAM role has minimal permissions
+### No Refresh Token Blacklist
+- **Risk:** Stolen refresh tokens valid for 30 days
+- **Fix:** Store revoked tokens in Redis, check on each refresh
 
-### Auth Token in localStorage
-- Access token stored in localStorage (intentional workaround for HTTP + cookie issue)
-- Move back to memory-only once HTTPS is configured and cookie `secure: true`
+### Single Admin Role (No RBAC)
+- **Risk:** All users are super-admins — any user can see profits, delete products, etc.
+- **Fix:** Add `role` enum (admin, manager, cashier), role-check middleware, restrict routes
 
-## Code Quality Issues
+### No Audit Logging
+- **Risk:** Cannot trace who performed what action
+- **Fix:** Create `audit_log` table, middleware to log user_id + action + entity + timestamp
+
+### MIME-Type Spoofing on Uploads
+- **Risk:** Malicious file upload disguised as PDF/image
+- **Fix:** Validate magic bytes with `file-type` npm package (not just extension/MIME header)
+
+## Medium Priority
 
 ### No Automated Tests
 - Zero unit tests, integration tests, or E2E tests
-- All testing is manual via browser
-- **Priority:** Medium — add at minimum: invoice creation, payment recording, stock ledger tests
+- **Recommendation:** Start with `invoices.service.js` (most critical) and `billing.calculations.js` (must match backend)
 
 ### No CI/CD Pipeline
-- Manual deployment: build Mac → SCP → SSH → pm2 restart
-- **Fix:** GitHub Actions → build → scp → restart
+- Manual deployment via SCP + SSH
+- GitHub Actions workflow exists but not fully operational
+- **Recommendation:** Automate: lint → test → build → deploy
 
-## Business Logic Gaps
+### No CORS Wildcard Guard
+- **Risk:** Accidental `CORS_ORIGIN=*` in production
+- **Fix:** Add startup check that errors on wildcard in production mode
 
-### No Email Integration
-- No invoice email delivery, no payment receipts, no overdue reminders
-- AWS SES is in dependencies but not wired up
-- **Planned:** Phase 2
+### Supervisor PIN Plaintext
+- **Risk:** Weak auth for sensitive operations
+- **Fix:** Hash with bcrypt, store hash in settings
 
-### product_suppliers Not Auto-Linked Before April 2026
-- Creating a purchase now auto-upserts `product_suppliers` (fixed April 2026)
-- Historical purchases before this fix will NOT show in supplier's "Products Supplied" tab
-- **Fix:** Run backfill query if needed
+### No nginx Security Headers
+- Missing: HSTS, Permissions-Policy, X-Permitted-Cross-Domain-Policies
+- **Fix:** Add to nginx.conf after HTTPS is enabled
 
-### No Thermal Printer Testing
-- 80mm template exists but untested with real hardware
+### No `npm audit` in CI
+- **Risk:** Dependency vulnerabilities go undetected
+- **Fix:** Add `npm audit --audit-level=high` to build pipeline
+
+## Low Priority / Future Enhancements
+
+### Business Features
+- **Email integration** — Send invoices/payment receipts via email (SES is in dependencies but not wired up)
+- **Barcode printing** — Generate barcode labels for products
+- **Multi-location support** — Multiple stores/warehouses
+- **Customer portal** — Self-service invoice lookup and payment history
+- **Credit limit enforcement** — Block billing when customer exceeds credit limit
+- **Batch billing** — Repeat last order for regular customers
+- **Discount tiers** — Customer-type-based or volume-based automatic discounts
+
+### Technical Improvements
+- **Thermal printer testing** — Template exists but untested on real hardware
+- **Offline mode** — Service worker for PWA offline billing (requires HTTPS first)
+- **Real-time updates** — WebSocket for multi-user stock sync
+- **Database backups** — Automated daily RDS snapshots (currently manual)
+- **Redis for production** — Enable BullMQ queue instead of sync PDF fallback
+- **Image uploads for products** — Product photos stored in S3
 
 ## Recently Fixed (April 2026)
 
-### Session fixes (April 11, 2026)
-1. **Return 422** — `returnInvoiceSchema` required `original_invoice_id`, `unit`, `rate` in body but controller adds `original_invoice_id` from URL params post-validation. Fixed by removing those from schema.
-2. **Supplier Products Supplied empty** — `createPurchaseWithStockIn` never wrote to `product_suppliers`. Fixed with UPSERT after each stock-in.
-3. **Supplier detail ₹NaN** — suppliers don't have `outstanding_balance` column. Removed from SupplierDetailPage.
-4. **Supplier purchase history wrong columns** — used `supplier_bill_no`, `amount_paid` (don't exist). Fixed to `po_number`, `total_amount`.
-5. **Dashboard Spin tip warning** — removed `tip` prop (requires nested mode in AntD 5).
-6. **Card bodyStyle deprecated** — changed to `styles.body` and `variant="borderless"`.
-7. **Auto-logout on refresh** — fixed with localStorage token persistence + backend cookie `secure: false` + `sameSite: lax`.
-8. **PDF Puppeteer crash** — installed Google Chrome, set PUPPETEER_EXECUTABLE_PATH, added headless flags.
-9. **Duplicate export routes** — removed from reports.router.js (kept in exports.router.js).
-10. **Array.isArray guards** — added to all setState calls on API list responses.
+| Issue | Fix | Commit |
+|-------|-----|--------|
+| Duplicate return vulnerability | Added `qty_returned` tracking + validation | `f5beda4a` |
+| Unit conversion not shown in PDFs | `{{ITEM_ROWS}}` template + buildItemRows() | `c4320d6a` |
+| Unit conversion not shown in Products list | Subquery for unit_conversions in getAllProducts | `2650b523` |
+| No security headers | Helmet middleware added | `2650b523` |
+| No login rate limiting | express-rate-limit on login route | `2650b523` |
+| Weak password allowed | Password policy: 8+ chars, uppercase, number, special | `2650b523` |
+| Invoice items unlimited | Items array capped at 500 | `2650b523` |
+| DB error details leaked | Error handler hides details in production | `2650b523` |
+| Return updates wrong balance | Fixed to reduce balance_due on original invoice | `0cb8652b` |
+| Quick Bill 422 error | Fixed validation for quickbill without customer_id | `0877fe0a` |
+| Product search missing search param | Controller/service search param passthrough | `8b4234c8` |
+| Auth refresh loop | Skip 401 redirect on /auth/refresh endpoint | `f2fb9419` |
 
-### Session fixes (April 10, 2026)
-1. **Supplier search** — added search bar to SuppliersPage
-2. **Purchase invoice upload** — new feature: multer v2, S3/local upload, view in detail page
-3. **New Supplier button in Purchases** — inline modal
-4. **Create New Product in Purchases** — ProductFormModal reuse
-5. **Billing unit dropdown** — hardware units for all products
-6. **Billing GST% editable** — InputNumber per line item
-7. **Startup env validation** — server.js exits loudly if JWT_SECRET etc. missing
-8. **multer 1.x → 2.x** — security upgrade
-9. **bcrypt 5.x → 6.x** — fixes tar vulnerability chain (0 vulnerabilities)
-10. **DB migration 008** — `notes`, `invoice_file_url` columns on purchases table
+## Infrastructure Notes
+
+- **EC2 t2.micro** — Cannot run Vite builds (OOM). Build frontend on Mac, SCP dist to EC2
+- **Redis not installed** on EC2 — PDF generation falls back to synchronous Puppeteer in API process
+- **Puppeteer on EC2** — Uses Google Chrome at `/usr/bin/google-chrome-stable` (not bundled Chromium)
+- **Single-AZ RDS** — No multi-AZ failover. Acceptable for current scale (~150 invoices/day)

@@ -1,160 +1,149 @@
 # Changelog
 
+> Last updated: 2026-04-17
+
 ## Phase 1 — Foundation (March 2026)
 
-### Database
-- PostgreSQL 15 schema: users, customers, products, invoices, invoice_items, payments, payment_modes_detail, stock_ledger, customer_ledger, purchases, purchase_items
-- pg_trgm extension for fuzzy search
-- Triggers: auto invoice numbering, negative stock prevention, append-only ledgers, customer outstanding sync
-- Sequences: retail, wholesale, quickbill invoice numbering
-- Seed data: admin user, 10 suppliers, 18 customers, 55+ products (Bihar hardware items)
+**Core system setup and basic operations.**
 
-### Backend
-- Express API with module pattern (router → controller → service → DB)
-- JWT authentication with refresh token flow
+- PostgreSQL 15 schema: users, customers, products, invoices, invoice_items, payments, payment_modes_detail, stock_ledger, customer_ledger, purchases, purchase_items
+- pg_trgm extension for fuzzy product search
+- DB triggers: auto invoice numbering, negative stock prevention, append-only ledgers, customer outstanding sync
+- Sequences: retail, wholesale, quickbill invoice numbering
+- Express.js API with module pattern (router → controller → service → validation)
+- JWT authentication (access token 8h + refresh token 30d httpOnly cookie)
 - Product CRUD with fuzzy name search + barcode lookup
 - Customer CRUD with phone validation + ledger
 - Invoice creation (10-step atomic transaction)
 - Payment recording (single + mixed mode)
 - Purchase orders with stock-in
-- PDF generation with Puppeteer + BullMQ queue
-- S3 upload with pre-signed URL downloads
-
-### Frontend
-- React 18 + Ant Design 5 + Vite
+- PDF generation: Puppeteer HTML → PDF → S3 upload
+- BullMQ queue for async PDF (fallback: sync if no Redis)
+- React 18 + Ant Design 5 + Vite SPA
 - Billing page with keyboard-first UX (F2, F4, F9, Esc shortcuts)
-- Product search with 150ms debounce
-- Customer search with phone prefix matching
-- Dashboard with summary stats
-- Invoice list + detail pages
-- Customer list + detail + ledger
-- Product list + detail + stock ledger
-
-### Infrastructure
-- EC2 t2.micro (Ubuntu 22.04) in ap-south-1
-- RDS PostgreSQL 15
-- S3 bucket (uma-erp-storage)
-- nginx reverse proxy
-- PM2 process management
+- Dashboard with summary stats, recent activity
+- Invoice, customer, product list + detail pages
+- Deployed: EC2 t2.micro + RDS PostgreSQL + S3 + nginx + PM2
+- Migrations: 001 (schema), 002 (triggers/functions)
+- Seeds: admin user, 55+ products, 18 customers, 10 suppliers, 6 sample invoices
 
 ## Phase 2 — Reports & Exports (March 2026)
 
-- 7 report types: Sales, GST, Stock, Stock Movement, Customer Dues, Profit, Collections
-- Server-side Excel exports using ExcelJS (streamed, not saved to disk)
-- Full data export (multi-sheet workbook)
-- Report pages with date range filters, summary cards, data tables
-- Export buttons on all report pages
+**7 report types with server-side Excel export.**
+
+- Sales, GST, Stock, Stock Movement, Customer Dues, Profit, Collections reports
+- Server-side ExcelJS exports (frozen headers, auto-width, currency formatting)
+- Full data export (multi-sheet workbook: Customers, Products, Invoices, Items, Payments, Ledger)
+- Report pages with date range filters, summary cards, data tables, export buttons
+- Product categories endpoint for filter dropdowns
 
 ## Phase 3 — Purchase Management (March-April 2026)
 
-- Purchase returns with qty tracking
-- Supplier debit notes (auto-generated)
-- Purchase return numbering (PR-YYYY-NNNNN sequence)
-- Stock restoration on purchase returns (return_out movement)
-- Supplier detail page with linked products + debit notes
+**Purchase orders, returns, and supplier debit notes.**
+
+- Suppliers CRUD (name, phone, GSTIN, payment terms)
+- Purchase order creation with automatic stock-in
+- PO auto-numbering (PO-YYYYMMDD-XXXX)
+- Purchase items auto-update product.purchase_price
+- Purchase returns with quantity validation
+- Supplier debit notes (auto-numbered DN-YYYY-NNNNN)
+- Migration: 005 (purchase_returns, debit_notes)
 
 ## Phase 4 — Product Enhancements (April 2026)
 
-- Unit conversions (alt units with conversion values)
-- Product price history tracking
-- Product-supplier linking (multi-supplier per product)
-- Base unit support for products
-- Settings table (store config, invoice prefixes)
-- Migration 003: Settings table
-- Migration 004: Unit conversions, price history, product suppliers
-- Migration 005: Purchase returns, debit notes
-- Migration 006: Invoice items alt_qty/alt_unit/base_qty
-- Migration 007: Missing sequences for purchase returns
+**Unit conversions, price history, supplier linking.**
 
-## Phase 5 — Sales Returns (April 2026)
+- Unit conversion system: base unit + alt units (e.g., 1 box = 12 pieces)
+- `product_unit_conversions` table with conversion_value, is_purchase_unit, is_sales_unit
+- Unit dropdown in billing: auto-calculates base_qty from alt_qty × conversion_value
+- Price history tracking: MRP, wholesale, cost changes with source (manual|billing|purchase)
+- Product-supplier linking via `product_suppliers` table (last_price, is_primary_supplier)
+- Product detail: price history SVG chart, stock card with conversion breakdown
+- Settings table (key-value store for shop config)
+- Migrations: 003 (settings), 004 (unit_conversions, price_history, product_suppliers)
 
-- Invoice return processing (partial/full)
-- Stock restoration on sales returns (return_in movement)
-- Customer ledger adjustment on returns
-- Invoice balance recalculation after return
+## Phase 5 — Sales Returns / Credit Notes (April 2026)
 
-## Phase 7 — Security Audit, UX Improvements & Infrastructure (April 2026)
+**Invoice returns with stock restoration.**
 
-### April 10–11, 2026
+- Sales return creates credit note (invoice with negative grand_total)
+- Stock restored via stock_ledger (movement_type = 'return_in')
+- Customer ledger credit entry for return amount
+- Original invoice balance_due reduced (never modifies grand_total)
+- Prevents duplicate returns: requested + already_returned ≤ original_qty
+- Return modal in InvoiceDetailPage
+- SUM(grand_total) in reports automatically accounts for returns
 
-**Security & Stability:**
-- Startup env-var validation in server.js (exits loudly if JWT_SECRET etc. missing)
-- multer 1.x → 2.x (security rewrite, same API)
-- bcrypt 5.x → 6.x (fixes tar/node-pre-gyp vulnerability chain — 0 vulnerabilities)
-- Backend cookie: `secure: false`, `sameSite: lax` (HTTP workaround until HTTPS)
-- Duplicate export route registration removed from reports.router.js
-- Array.isArray() guards on all frontend setState calls for list data
+## Phase 6 — Bug Fixes & Full Audit (April 5, 2026)
 
-**Auth:**
-- authStore.js: localStorage token persistence (fixes auto-logout on page refresh)
-- Refresh token cookie settings fixed for HTTP environment
+**Systematic audit of all pages and services.**
 
-**Purchases Module:**
-- Migration 008: `notes` + `invoice_file_url` columns on purchases table
-- Purchase invoice file upload (multer, PDF/image, 5MB max, S3 or local)
-- Auto-link products to suppliers on purchase creation (product_suppliers UPSERT)
-- "Add Supplier" inline modal on NewPurchasePage
-- "Create New Product" button on NewPurchasePage (reuses ProductFormModal)
-- Invoice file view in PurchaseDetailPage
+- InvoiceDetailPage: 12+ field name mismatches fixed (₹NaN → correct values)
+  - `payment_status` → `status`, `total_taxable` → `taxable_total`, nested `customer.name` → flat `customer_name`
+- All 7 report pages: camelCase → snake_case alignment with backend
+- reports.service.js: removed camelCase mapping — returns raw DB columns
+- invoices.service.js: added profit_amount to listInvoices, added summary query
+- products.service.js: stock adjustment wrapped in transaction, deleteUnitConversion fixed
+- Removed unused quick pick/frequent products code
+- Created `.context/` documentation folder (9 files)
 
-**Billing UX:**
-- Unit column: dropdown with 20 hardware units for ALL products (not just ones with unit conversions)
-- GST% column: editable InputNumber per line item (was read-only)
+## Phase 7 — Security, UX & Infrastructure (April 10-17, 2026)
 
-**Supplier Module:**
-- Supplier list: search bar (filters by name/phone/GSTIN)
-- Supplier detail: removed non-existent outstanding_balance field (was showing ₹NaN)
-- Supplier detail: Purchase History columns fixed (po_number, total_amount, item_count)
+### Security Hardening (April 17)
+- Helmet security headers (X-Frame-Options, X-Content-Type-Options, etc.)
+- Login rate limiting: 5 attempts per 15 minutes per IP (express-rate-limit)
+- Password policy: min 8 chars, uppercase, number, special character
+- Invoice items array capped at 500 (DoS prevention)
+- Error handler hides DB column/constraint details in production
+- multer 1.x → 2.x security upgrade
+- bcrypt 5.x → 6.x (0 vulnerabilities)
 
-**Bug Fixes:**
-- Return 422: returnInvoiceSchema removed invalid body field requirements
-- Dashboard: Spin tip warning fixed, Card bodyStyle deprecated prop fixed
-- Supplier Products Supplied tab: now auto-populated from purchases
+### Duplicate Return Prevention (April 17)
+- Added `invoice_items.qty_returned` column (cumulative tracking)
+- Return validation: `requested + already_returned ≤ original_qty`
+- Error code: RETURN_QTY_EXCEEDS_ORIGINAL
+- Migration: 009 (qty_returned)
 
-**Infrastructure:**
-- Google Chrome installed on EC2 for Puppeteer PDF generation
-- PUPPETEER_EXECUTABLE_PATH set to /usr/bin/google-chrome-stable
-- Puppeteer flags: --disable-gpu, --no-zygote, --no-first-run added
-- Local dev setup: .env.local for backend (local PostgreSQL), frontend .env.local (proxy to localhost:4000)
+### Unit Conversion Display (April 17)
+- PDF templates show "2 Box (24 Pcs)" in qty column when alt_unit present
+- `buildItemRows()` + `buildThermalItemRows()` in pdf.js
+- Templates use `{{ITEM_ROWS}}` placeholder instead of loop syntax
+- Products list: stock column shows base qty + box equivalent below
+- Product detail: stock card with conversion breakdown
 
-## Phase 6 — Bug Fixes & Audit (April 2026)
+### PWA Support (April 17)
+- manifest.json: app name, icons, display: standalone
+- PWAInstallButton component in AppLayout header
+- Placeholder icons (192px + 512px)
+- Meta tags in index.html (theme-color, manifest link)
+- Requires HTTPS + service worker to activate (not yet available)
 
-### Codebase Audit (April 5, 2026)
-Comprehensive audit of all frontend pages and backend services.
+### Auth & Purchases (April 10-11)
+- Auth: localStorage token persistence (fixes auto-logout on refresh)
+- Purchases: invoice file upload (multer, S3/local), notes editing
+- Auto-link products to suppliers on purchase creation (UPSERT)
+- Billing UX: unit dropdown, editable GST%, Tab flow
+- Supplier: search bar, fixed detail page, products/debit-notes display
+- Startup env-var validation in server.js
+- Migration: 007 (purchase_return_seq), 008 (purchase invoice upload)
 
-**Frontend Fixes:**
-- InvoiceDetailPage: 12+ field name mismatches fixed (₹NaN values)
-  - `payment_status` → `status`
-  - `total_taxable` → `taxable_total`
-  - `total_gst` → `gst_total`
-  - `total_discount` → `discount_total`
-  - `taxable` → `taxable_amount`, `net_amount` → `line_total`
-  - Customer section: nested `customer.name` → flat `customer_name`
-- InvoicesPage: `payment_status` → `status`, `total_profit` → `profit_amount`
-- All 7 report pages: systematic camelCase → snake_case alignment
-  - SalesReportPage: invoice_date→date, payment_status→status, total_tax→total_gst
-  - GstReportPage: gst_rate→gst_pct, cgst_amount→cgst, sgst_amount→sgst
-  - StockReportPage: reorder_level→min_stock, stock_value→stock_value_cost
-  - CustomerDuesPage: customer_name→name, customer_id→id, customer_type→type
-  - ProfitReportPage: total_sales→total_revenue, total_cost→total_cogs
-  - CollectionsReportPage: payment_mode→mode, total_amount→total_collected
-  - StockMovementPage: verified correct (already matched)
+### Bug Fixes (April 10-11)
+- Return 422: removed invalid body field requirements from schema
+- Dashboard: Spin tip warning, Card bodyStyle deprecated prop
+- Quick Bill 422: fixed validation for quickbill without customer_id
+- Product search: missing search param passthrough
+- Auth refresh loop: skip 401 redirect on /auth/refresh
 
-**Backend Fixes:**
-- reports.service.js: Removed all camelCase mapping — returns raw DB columns
-- reports.controller.js: Fixed `billType`→`bill_type`, `customerId`→`customer_id` param names
-- exports.service.js: Updated data key references to match new return shapes
-- invoices.service.js: Added profit_amount to listInvoices, added summary query
-- invoices.controller.js: Added summary to list response
-- products.service.js: Fixed deleteUnitConversion (removed extra productId param)
-- products.service.js: Wrapped stock adjustment in transaction (BEGIN/COMMIT/ROLLBACK)
+## Migration Summary
 
-**Removed:**
-- Frequent products/quick pick feature (unused code in search service + frontend)
-
-## Documentation Overhaul (April 5, 2026)
-
-- Restructured CLAUDE.md to concise orientation document
-- Created `.context/` folder with 9 detailed reference documents
-- ARCHITECTURE.md, DATABASE.md, API.md, MODULES.md, FRONTEND.md
-- SECURITY.md, KNOWN_ISSUES.md, CHANGELOG.md, QUICKSTART.md
+| # | File | Description |
+|---|------|-------------|
+| 001 | initial_schema.sql | Core tables, indexes, sequences |
+| 002 | triggers_and_functions.sql | Append-only triggers, auto invoice numbering, outstanding sync |
+| 003 | settings.sql | Settings key-value table |
+| 004 | unit_conversions_and_price_history.sql | Unit conversions, price history, product-supplier links |
+| 005 | purchase_returns_and_debit_notes.sql | Purchase returns, debit notes |
+| 006 | invoice_items_alt_qty.sql | alt_qty, alt_unit, base_qty on invoice_items |
+| 007 | missing_sequences.sql | purchase_return_seq, auto return numbering |
+| 008 | purchase_invoice_upload.sql | notes + invoice_file_url on purchases |
+| 009 | invoice_items_qty_returned.sql | qty_returned column for duplicate return prevention |

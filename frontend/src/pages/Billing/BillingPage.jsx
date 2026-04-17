@@ -331,7 +331,7 @@ export default function BillingPage() {
 
   // ───── Unit conversion change handler ─────
   const handleUnitChange = useCallback((idx, value, item) => {
-    const baseUnit = item.unit;
+    const baseUnit = item.base_unit;
     if (value === baseUnit) {
       // Revert to base unit
       updateItemFields(idx, {
@@ -339,19 +339,22 @@ export default function BillingPage() {
         alt_qty: null,
         base_qty: null,
         selected_unit: null,
+        _conversionValue: null,
       });
     } else {
       const rawConv = unitConversionsCache.current[item.product_id];
       const conversions = Array.isArray(rawConv) ? rawConv : [];
       const conv = conversions.find(c => c.unit_name === value);
       if (conv) {
+        const cvValue = parseFloat(conv.conversion_value);
         const altQty = item.qty;
-        const baseQty = parseFloat((altQty * conv.conversion_value).toFixed(4));
+        const baseQty = parseFloat((altQty * cvValue).toFixed(4));
         updateItemFields(idx, {
           selected_unit: value,
           alt_unit: value,
           alt_qty: altQty,
           base_qty: baseQty,
+          _conversionValue: cvValue,
         });
       }
     }
@@ -386,32 +389,40 @@ export default function BillingPage() {
     {
       title: 'Qty',
       dataIndex: 'qty',
-      width: 70,
-      render: (val, _, idx) => (
-        <InputNumber
-          ref={(el) => { qtyInputRefs.current[idx] = el; }}
-          className="billing-qty-input"
-          min={1}
-          value={val}
-          onChange={(v) => updateItem(idx, 'qty', v || 1)}
-          onKeyDown={(e) => handleQtyKeyDown(e, idx)}
-          onFocus={(e) => e.target.select()}
-          size="small"
-          style={{ width: '100%' }}
-        />
+      width: 90,
+      render: (val, record, idx) => (
+        <div>
+          <InputNumber
+            ref={(el) => { qtyInputRefs.current[idx] = el; }}
+            className="billing-qty-input"
+            min={0.001}
+            value={val}
+            onChange={(v) => updateItem(idx, 'qty', v || 1)}
+            onKeyDown={(e) => handleQtyKeyDown(e, idx)}
+            onFocus={(e) => e.target.select()}
+            size="small"
+            style={{ width: '100%' }}
+          />
+          {record.alt_unit && record.base_qty && (
+            <div style={{ fontSize: 10, color: '#888', marginTop: 2, textAlign: 'center' }}>
+              = {record.base_qty} {record.base_unit}
+            </div>
+          )}
+        </div>
       ),
     },
     {
       title: 'Unit',
       dataIndex: 'unit',
       width: 88,
-      render: (baseUnit, record, idx) => {
+      render: (unitVal, record, idx) => {
         const rawConversions = unitConversions[record.product_id];
         const conversions = Array.isArray(rawConversions) ? rawConversions : [];
+        const bUnit = record.base_unit || unitVal;
 
         const options = conversions.length > 0
           ? [
-              { label: baseUnit, value: baseUnit },
+              { label: bUnit, value: bUnit },
               ...conversions.map(c => ({ label: c.unit_name, value: c.unit_name })),
             ]
           : HARDWARE_UNITS.map(u => ({ label: u, value: u }));
@@ -419,7 +430,7 @@ export default function BillingPage() {
         return (
           <Select
             size="small"
-            value={record.selected_unit || baseUnit}
+            value={record.selected_unit || bUnit}
             options={options}
             showSearch
             onChange={(val) => {

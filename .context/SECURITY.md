@@ -1,68 +1,78 @@
 # Security
 
-## Authentication
+> Last updated: 2026-04-17
 
+## What's Implemented
+
+### Authentication
 - **JWT access token** — 8-hour expiry, stored in memory (Zustand), sent via `Authorization: Bearer` header
-- **Refresh token** — 30-day expiry, stored in httpOnly cookie, used only for `/api/auth/refresh`
+- **JWT refresh token** — 30-day expiry, httpOnly cookie, `sameSite: 'lax'`
 - **Password hashing** — bcrypt with cost factor 12
-- **Single role** — `admin` only (all authenticated users have full access)
-- Admin seed: `admin@store.local` / `Aman@9431` (in `db/seeds/001_admin_user.sql`)
+- **Password policy** — min 8 chars, requires uppercase + number + special character
+- **Login rate limiting** — 5 attempts per 15 minutes per IP (express-rate-limit)
 
-## Request Security
+### Security Headers (Helmet)
+- `X-Frame-Options: SAMEORIGIN` (anti-clickjacking)
+- `X-Content-Type-Options: nosniff`
+- `X-DNS-Prefetch-Control: off`
+- `X-Download-Options: noopen`
+- `X-XSS-Protection: 0` (modern recommendation)
+- `Referrer-Policy: no-referrer`
+- CSP disabled (Ant Design requires inline styles)
 
-- **CORS** — Configured in Express with `CORS_ORIGIN` env var (production: `http://13.204.240.166`)
-- **Rate limiting** — express-rate-limit on all routes (configurable window/max)
-- **JWT verification** — `authenticateJWT` middleware on all routes except `/api/auth/login`, `/api/auth/logout`, `/api/auth/refresh`, `/api/health`
-- **Input validation** — express-validator schemas on all POST/PUT routes, validated before controller executes
-- **Parameterized queries** — All SQL uses `$1, $2, $3` placeholders — never string interpolation
+### SQL Injection Prevention
+All queries use parameterized queries (`$1, $2, $3`). Zero string interpolation in SQL. Verified across all 11 service modules.
 
-## Database Security
+### Input Validation
+- express-validator schemas on all POST/PUT routes
+- Invoice items capped at 500 (DoS prevention)
+- File upload validation: PDF/JPEG/PNG/WebP only, 5MB max (multer)
 
-- **RDS SSL** — Connection uses `ssl: { rejectUnauthorized: false }` in production
-- **No SELECT *** — All queries specify explicit column lists
-- **Append-only ledgers** — stock_ledger and customer_ledger cannot be updated or deleted (trigger-enforced)
-- **Negative stock prevention** — DB trigger blocks current_stock from going below 0
-- **Soft deletes** — Customers and products are never hard-deleted
+### Data Protection
+- Cost prices and profit never exposed in customer-facing PDFs
+- S3 bucket is private — access via pre-signed URLs (1hr expiry)
+- Error handler hides DB details (column names, constraints) in production
+- `UPDATABLE_FIELDS` whitelist prevents mass assignment attacks
 
-## File Storage Security
+### Database Security
+- Append-only ledgers (DB triggers block UPDATE/DELETE)
+- Soft deletes only (is_active = false)
+- Transaction isolation for invoice creation (FOR UPDATE locks)
+- Payment amount guarded: cannot exceed balance_due
 
-- **S3 bucket** — Private (`uma-erp-storage`), no public access
-- **Pre-signed URLs** — 1-hour expiry for PDF downloads, generated per request
-- **No direct S3 URLs** — Frontend never receives raw S3 URLs
-- **Local fallback** — Uses `local://` prefix, files served via `sendFile()` only
+## Known Gaps (To Fix)
 
-## What Is NOT Exposed to Customers (PDF/Invoice)
+### Critical
+| Issue | Risk | Fix |
+|-------|------|-----|
+| **No HTTPS** | All data in plaintext, cookies interceptable | Buy domain + Let's Encrypt certbot |
+| **JWT secret is weak** | Token forgery possible | `openssl rand -hex 32` → update .env |
+| **Cookie `secure: false`** | Refresh token sent over HTTP | Set `true` after HTTPS |
+| **DB SSL `rejectUnauthorized: false`** | MitM on DB connection | Download RDS CA cert, enable validation |
 
-These fields are internal-only and must never appear on customer-facing documents:
-- `purchase_price` / `cost_price_snapshot`
-- `profit_amount` / `profit_pct` / `line_profit`
-- `total_cost`
+### High
+| Issue | Risk | Fix |
+|-------|------|-----|
+| No CSRF tokens | Cross-site request forgery | Add csurf or SameSite=Strict |
+| No refresh token blacklist | Stolen tokens valid for 30 days | Store revoked tokens in Redis |
+| Single admin role, no RBAC | All users are super-admins | Add role checks middleware |
+| No audit logging | Can't trace who did what | Create audit_log table |
+| MIME-type spoofing on uploads | Malicious file upload | Validate magic bytes (file-type npm) |
 
-## Current Security Gaps (Known)
+### Medium
+| Issue | Risk | Fix |
+|-------|------|-----|
+| No nginx security headers | Missing HSTS, Permissions-Policy | Add to nginx.conf |
+| Supervisor PIN plaintext | Weak auth for sensitive ops | Hash with bcrypt |
+| No npm audit in CI/CD | Dependency vulnerabilities | Add to GitHub Actions |
+| No CORS wildcard guard | Misconfiguration risk | Error on `CORS_ORIGIN=*` in production |
 
-1. **No HTTPS** — Site runs on HTTP only (needs domain + ACM certificate)
-2. **No rate limiting on login** — Should add stricter per-IP limits
-3. **No CSRF tokens** — Relies on CORS + httpOnly cookies
-4. **No IP allowlisting** — RDS accepts connections from EC2 security group, but no WAF
-5. **Supervisor PIN** — Stored in plaintext in settings table (`supervisor_pin = '0000'`)
-6. **No audit trail** — User actions (who changed what) are not comprehensively logged
-7. **No password complexity enforcement** — Only bcrypt hashing, no policy on password strength
-8. **No session invalidation** — Cannot force-logout a user (refresh tokens not blacklisted)
+## Credential Rotation Checklist
 
-## Deployment Security
+When rotating credentials (MUST do before going live with real customer data):
 
-- **SSH** — Key-based only (`.pem` file), no password auth
-- **PM2** — Runs as `ubuntu` user, not root
-- **nginx** — Reverse proxy, no direct access to Node.js port
-- **Environment variables** — `.env` file on server, not in git (`.gitignore` includes `.env`)
-- **Frontend build** — Done locally on Mac, SCP'd to EC2 (t2.micro can't build)
-
-## Recommended Next Steps
-
-1. Add HTTPS (domain + ACM certificate + nginx SSL)
-2. Implement login rate limiting (5 attempts per 15 minutes per IP)
-3. Add CSRF protection or switch to SameSite cookies
-4. Set up AWS WAF in front of EC2
-5. Add audit logging (who changed what, when)
-6. Implement password complexity policy
-7. Add refresh token blacklist (Redis or DB table) for session invalidation
+1. **JWT secrets:** `openssl rand -hex 32` for both JWT_SECRET and JWT_REFRESH_SECRET
+2. **AWS keys:** IAM Console → create new access key → update .env → delete old key
+3. **RDS password:** RDS Console → Modify → new password → update .env
+4. **GitHub token:** Settings → Personal Access Tokens → regenerate
+5. Never commit `.env` to git (already in .gitignore)

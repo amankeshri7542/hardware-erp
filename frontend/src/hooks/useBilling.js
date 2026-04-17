@@ -53,6 +53,13 @@ export function useBilling(initialBillType = 'retail') {
     setItems(prev => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
+
+      // If qty changed AND item has an active unit conversion, recalculate base_qty
+      if (field === 'qty' && updated[index].alt_unit && updated[index]._conversionValue) {
+        updated[index].alt_qty = value;
+        updated[index].base_qty = parseFloat((value * updated[index]._conversionValue).toFixed(4));
+      }
+
       // Recalculate if discount_pct changed
       if (field === 'discount_pct') {
         updated[index].discount_amount = updated[index].rate * (value / 100);

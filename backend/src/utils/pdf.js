@@ -143,8 +143,8 @@ function buildItemRows(items, hasAltQty) {
   return items
     .map(
       (item) => {
-        const qtyString = item.alt_qty && item.alt_unit 
-          ? `${item.alt_qty} ${item.alt_unit} <br><small style="color:#666">(${item.quantity} ${item.unit})</small>`
+        const qtyString = item.alt_qty && item.alt_unit
+          ? `${item.alt_qty} ${item.alt_unit} <br><small style="color:#666">(${item.base_qty || item.quantity} ${item.unit})</small>`
           : `${item.quantity} ${item.unit}`;
         
         return `
@@ -171,7 +171,7 @@ function buildThermalItemRows(items) {
   return items
     .map((item) => {
       const qtyLine = item.alt_qty && item.alt_unit
-        ? `${item.alt_qty} ${item.alt_unit} (${item.quantity} ${item.unit})`
+        ? `${item.alt_qty} ${item.alt_unit} (${item.base_qty || item.quantity} ${item.unit})`
         : `${item.quantity} ${item.unit}`;
 
       return `
