@@ -2,20 +2,20 @@ const { pool } = require('../../config/db');
 
 // ─── Column lists (no SELECT *) ───────────────────────────────────
 const PRODUCT_COLUMNS = `
-  id, name, category, brand, sku, barcode, unit, hsn_code,
+  id, name, category, brand, sku, barcode, unit, base_unit, hsn_code,
   gst_rate, mrp, wholesale_price, purchase_price,
   current_stock, min_stock, is_active, created_at, updated_at
 `;
 
 const PRODUCT_INSERT_COLUMNS = [
-  'name', 'category', 'brand', 'sku', 'barcode', 'unit', 'hsn_code',
+  'name', 'category', 'brand', 'sku', 'barcode', 'unit', 'base_unit', 'hsn_code',
   'gst_rate', 'mrp', 'wholesale_price', 'purchase_price',
   'current_stock', 'min_stock', 'is_active',
 ];
 
 // ─── Allowed fields for dynamic UPDATE ────────────────────────────
 const UPDATABLE_FIELDS = new Set([
-  'name', 'category', 'brand', 'sku', 'barcode', 'unit', 'hsn_code',
+  'name', 'category', 'brand', 'sku', 'barcode', 'unit', 'base_unit', 'hsn_code',
   'gst_rate', 'mrp', 'wholesale_price', 'purchase_price',
   'min_stock', 'is_active', 'current_stock',
 ]);
@@ -62,7 +62,7 @@ async function getAllProducts({ search, category, isActive, lowStockOnly, page =
   values.push(limit, offset);
 
   const result = await pool.query(
-    `SELECT p.id, p.name, p.category, p.brand, p.sku, p.barcode, p.unit,
+    `SELECT p.id, p.name, p.category, p.brand, p.sku, p.barcode, p.unit, p.base_unit,
        p.hsn_code, p.gst_rate, p.mrp, p.wholesale_price, p.purchase_price,
        p.current_stock, p.min_stock, p.is_active, p.created_at, p.updated_at,
        (SELECT json_agg(json_build_object(
@@ -96,6 +96,11 @@ async function getProductById(id) {
  * Handles pg 23505 (unique violation) for sku/barcode.
  */
 async function createProduct(data) {
+  // Auto-sync base_unit: if not explicitly provided, default to unit
+  if (!data.base_unit && data.unit) {
+    data.base_unit = data.unit;
+  }
+
   const columns = [];
   const placeholders = [];
   const values = [];
@@ -142,6 +147,11 @@ async function createProduct(data) {
  * If current_stock is being changed, creates a stock_ledger entry.
  */
 async function updateProduct(id, data, userId) {
+  // Auto-sync base_unit when unit changes (unless base_unit explicitly provided)
+  if (data.unit && !data.base_unit) {
+    data.base_unit = data.unit;
+  }
+
   const hasStockChange = data.current_stock !== undefined;
 
   const fields = [];
