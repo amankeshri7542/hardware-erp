@@ -567,7 +567,7 @@ async function processReturn(data, userId) {
     const origItemsResult = await client.query(
       `SELECT id, product_id, qty, unit, rate, discount_pct, discount_amount,
               gst_pct, cost_price_snapshot, product_name_snapshot, hsn_snapshot,
-              alt_qty, alt_unit, base_qty
+              alt_qty, alt_unit, base_qty, qty_returned
        FROM invoice_items WHERE invoice_id = $1`,
       [data.original_invoice_id]
     );
@@ -587,10 +587,12 @@ async function processReturn(data, userId) {
         err.errorCode = 'INVALID_RETURN_ITEM';
         throw err;
       }
-      if (item.qty_returned > parseFloat(origItem.qty)) {
+      const alreadyReturned = parseFloat(origItem.qty_returned) || 0;
+      const remainingReturnable = parseFloat(origItem.qty) - alreadyReturned;
+      if (item.qty_returned > remainingReturnable) {
         await client.query('ROLLBACK');
         const err = new Error(
-          `Return qty (${item.qty_returned}) exceeds original qty (${origItem.qty}) for item ${item.invoice_item_id}`
+          `Return qty (${item.qty_returned}) exceeds returnable qty (${remainingReturnable}) for item ${item.invoice_item_id}. Already returned: ${alreadyReturned}`
         );
         err.statusCode = 422;
         err.errorCode = 'RETURN_QTY_EXCEEDS_ORIGINAL';
@@ -686,7 +688,7 @@ async function processReturn(data, userId) {
     );
     const creditNote = creditNoteResult.rows[0];
 
-    // INSERT credit note items
+    // INSERT credit note items and update qty_returned on original items
     for (const item of returnItems) {
       await client.query(
         `INSERT INTO invoice_items (
@@ -704,6 +706,12 @@ async function processReturn(data, userId) {
           item.cost_price_snapshot, -item.line_profit,
           item.alt_unit ? -item.qty_returned : null, item.alt_unit || null, item.alt_unit ? -item.calc_qty : null
         ]
+      );
+
+      // Track cumulative returned qty on the original invoice item
+      await client.query(
+        `UPDATE invoice_items SET qty_returned = qty_returned + $1 WHERE id = $2`,
+        [item.qty_returned, item.invoice_item_id]
       );
     }
 
