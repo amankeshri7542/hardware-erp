@@ -386,6 +386,7 @@ async function getInvoiceById(id) {
       ii.hsn_snapshot, ii.qty, ii.unit, ii.rate, ii.discount_pct,
       ii.discount_amount, ii.taxable_amount, ii.gst_pct, ii.gst_amount,
       ii.line_total, ii.cost_price_snapshot, ii.line_profit,
+      ii.alt_qty, ii.alt_unit, ii.base_qty,
       p.name AS current_product_name, p.current_stock
     FROM invoice_items ii
     LEFT JOIN products p ON p.id = ii.product_id

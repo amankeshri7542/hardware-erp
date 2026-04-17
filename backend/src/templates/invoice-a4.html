@@ -271,20 +271,7 @@
     </tr>
   </thead>
   <tbody>
-    {{#items}}
-    <tr>
-      <td>{{sr_no}}</td>
-      <td class="left">{{product_name}}</td>
-      <td>{{hsn_code}}</td>
-      <td>{{quantity}}</td>
-      {{#HAS_ALT_QTY}}<td>{{alt_qty}}</td>{{/HAS_ALT_QTY}}
-      <td>{{unit}}</td>
-      <td class="right">{{rate}}</td>
-      <td>{{discount_pct}}</td>
-      <td>{{gst_pct}}</td>
-      <td class="right">{{total}}</td>
-    </tr>
-    {{/items}}
+    {{ITEM_ROWS}}
   </tbody>
 </table>
 

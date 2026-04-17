@@ -164,6 +164,29 @@ function buildItemRows(items, hasAltQty) {
 }
 
 /**
+ * Generate thermal item rows HTML.
+ * NEVER includes purchase_price, cost_price_snapshot, profit_amount, profit_pct, or line_profit.
+ */
+function buildThermalItemRows(items) {
+  return items
+    .map((item) => {
+      const qtyLine = item.alt_qty && item.alt_unit
+        ? `${item.alt_qty} ${item.alt_unit} (${item.quantity} ${item.unit})`
+        : `${item.quantity} ${item.unit}`;
+
+      return `
+<div class="item-row">
+  <div class="item-name">${item.product_name || ''}</div>
+  <div class="item-calc">
+    <span>${qtyLine} x ${formatCurrency(item.rate)}</span>
+    <span>${formatCurrency(item.total)}</span>
+  </div>
+</div>`;
+    })
+    .join('\n');
+}
+
+/**
  * Build GST summary rows HTML.
  */
 function buildGstSummaryRows(items) {
@@ -211,15 +234,19 @@ async function generateInvoicePDF(invoiceData, options = {}) {
   // Determine if any item has alt_qty
   const hasAltQty = !!(invoiceData.has_alt_qty || (invoiceData.items || []).some(i => i.alt_qty));
 
-  // Build item rows and GST summary rows
-  const itemRowsHtml = buildItemRows(invoiceData.items || [], hasAltQty);
+  // Build item rows (A4 table rows or thermal div rows) and GST summary rows
+  const isThermalTemplate = templateName === 'invoice-thermal';
+  const itemRowsHtml = isThermalTemplate
+    ? buildThermalItemRows(invoiceData.items || [])
+    : buildItemRows(invoiceData.items || [], hasAltQty);
   const gstSummaryRowsHtml = buildGstSummaryRows(invoiceData.items || []);
 
-  // Replace items block
+  // Replace items block — supports both {{#items}}...{{/items}} and {{ITEM_ROWS}}
   html = html.replace(
     /\{\{#items\}\}[\s\S]*?\{\{\/items\}\}/,
     itemRowsHtml
   );
+  html = html.replace('{{ITEM_ROWS}}', itemRowsHtml);
 
   // Replace GST summary block
   html = html.replace(
@@ -285,7 +312,6 @@ async function generateInvoicePDF(invoiceData, options = {}) {
   html = replacePlaceholders(html, templateData);
 
   // Determine PDF options based on template
-  const isThermal = templateName === 'invoice-thermal';
 
   // Launch Puppeteer and generate PDF
   // --disable-gpu + --no-zygote: required when running headless inside a systemd/PM2 service
@@ -310,7 +336,7 @@ async function generateInvoicePDF(invoiceData, options = {}) {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });
 
-    const pdfOptions = isThermal
+    const pdfOptions = isThermalTemplate
       ? {
           width: '80mm',
           printBackground: true,

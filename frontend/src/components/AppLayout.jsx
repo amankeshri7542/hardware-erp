@@ -17,6 +17,7 @@ import {
 } from '@ant-design/icons';
 import useAuthStore from '../store/authStore';
 import { logoutApi } from '../api/auth.api';
+import PWAInstallButton from './PWAInstallButton';
 
 const { Header, Sider, Content, Footer } = Layout;
 const { Text } = Typography;
@@ -137,6 +138,7 @@ export default function AppLayout() {
           />
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <PWAInstallButton />
             <Text style={{ color: '#595959' }}>
               {user?.name || 'Admin'}
             </Text>

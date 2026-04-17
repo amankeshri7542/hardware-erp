@@ -8,7 +8,7 @@ import {
 import { ArrowLeftOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   getProduct, getStockLedger, getProductPriceHistory,
-  getProductSuppliers, linkProductSupplier,
+  getProductSuppliers, linkProductSupplier, getUnitConversions,
 } from '../../api/products.api';
 import { getSuppliers } from '../../api/suppliers.api';
 import { formatINR, formatDate } from '../../utils/formatCurrency';
@@ -48,6 +48,7 @@ export default function ProductDetailPage() {
   const [allSuppliers, setAllSuppliers] = useState([]);
   const [linkForm] = Form.useForm();
   const [linkSaving, setLinkSaving] = useState(false);
+  const [unitConversions, setUnitConversions] = useState([]);
 
   const fetchProduct = useCallback(async () => {
     setLoading(true);
@@ -109,8 +110,18 @@ export default function ProductDetailPage() {
     }
   }, [id]);
 
+  const fetchUnitConversions = useCallback(async () => {
+    try {
+      const { data } = await getUnitConversions(id);
+      setUnitConversions(Array.isArray(data.data) ? data.data : []);
+    } catch {
+      // Not critical — silently ignore
+    }
+  }, [id]);
+
   useEffect(() => { fetchProduct(); }, [fetchProduct]);
   useEffect(() => { fetchLedger(); }, [fetchLedger]);
+  useEffect(() => { fetchUnitConversions(); }, [fetchUnitConversions]);
 
   const handleTabChange = (key) => {
     if (key === 'price-history' && priceHistory.length === 0) {
@@ -244,6 +255,34 @@ export default function ProductDetailPage() {
               {product.current_stock}
             </div>
             <Text type="secondary">{product.unit}s</Text>
+            {unitConversions.length > 0 && (() => {
+              const stock = parseFloat(product.current_stock) || 0;
+              return unitConversions.map((conv) => {
+                const cv = parseFloat(conv.conversion_value) || 1;
+                const wholeUnits = Math.floor(stock / cv);
+                const remainder = parseFloat((stock - wholeUnits * cv).toFixed(3));
+                const label = conv.unit_name;
+                const baseUnit = product.unit;
+                let display;
+                if (wholeUnits > 0 && remainder > 0) {
+                  display = `${wholeUnits} ${label} + ${remainder} ${baseUnit}`;
+                } else if (wholeUnits > 0) {
+                  display = `${wholeUnits} ${label}`;
+                } else {
+                  display = `${stock} ${baseUnit}`;
+                }
+                return (
+                  <div key={conv.id} style={{ marginTop: 4 }}>
+                    <Tag color="blue" style={{ fontSize: 12 }}>
+                      {display}
+                    </Tag>
+                    <div style={{ fontSize: 10, color: '#8c8c8c', marginTop: 2 }}>
+                      1 {label} = {cv} {baseUnit}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
             {isLowStock && (
               <div style={{ marginTop: 8 }}>
                 <Badge status="error" text={`Below min (${product.min_stock})`} />
