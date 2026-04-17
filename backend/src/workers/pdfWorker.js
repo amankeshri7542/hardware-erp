@@ -79,7 +79,7 @@ const worker = new Worker(
            ii.qty, ii.unit, ii.rate, ii.discount_pct,
            ii.discount_amount, ii.taxable_amount,
            ii.gst_pct, ii.gst_amount, ii.line_total,
-           ii.alt_qty, ii.alt_unit
+           ii.alt_qty, ii.alt_unit, ii.base_qty
          FROM invoice_items ii
          WHERE ii.invoice_id = $1
          ORDER BY ii.id ASC`,
@@ -103,6 +103,7 @@ const worker = new Worker(
         total: row.line_total,
         alt_qty: row.alt_qty,
         alt_unit: row.alt_unit,
+        base_qty: row.base_qty,   // ← CRITICAL FIX: was missing, caused "(2 piece)" instead of "(200 piece)"
       }));
 
       const customerName = invoice.bill_type === 'quickbill'
