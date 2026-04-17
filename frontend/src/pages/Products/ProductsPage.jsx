@@ -97,16 +97,34 @@ export default function ProductsPage() {
       render: (v) => formatINR(v), align: 'right',
     },
     {
-      title: 'Stock', dataIndex: 'current_stock', key: 'current_stock', width: 100,
-      render: (stock, record) => (
-        <span style={{
-          color: stock < record.min_stock ? '#ff4d4f' : '#52c41a',
-          fontWeight: stock < record.min_stock ? 700 : 400,
-        }}>
-          {stock} {stock < record.min_stock && <WarningOutlined />}
-        </span>
-      ),
-      align: 'right',
+      title: 'Stock', dataIndex: 'current_stock', key: 'current_stock', width: 160,
+      render: (stock, record) => {
+        const isLow = stock < record.min_stock;
+        const convs = record.unit_conversions;
+        let convText = null;
+        if (convs && convs.length > 0) {
+          const cv = parseFloat(convs[0].conversion_value) || 1;
+          const s = parseFloat(stock) || 0;
+          const whole = Math.floor(s / cv);
+          const rem = parseFloat((s - whole * cv).toFixed(3));
+          const uName = convs[0].unit_name;
+          if (whole > 0 && rem > 0) {
+            convText = `${whole} ${uName} + ${rem} ${record.unit}`;
+          } else if (whole > 0) {
+            convText = `${whole} ${uName}`;
+          }
+        }
+        return (
+          <div>
+            <span style={{ color: isLow ? '#ff4d4f' : '#52c41a', fontWeight: isLow ? 700 : 400 }}>
+              {stock} {record.unit} {isLow && <WarningOutlined />}
+            </span>
+            {convText && (
+              <div style={{ fontSize: 11, color: '#8c8c8c' }}>{convText}</div>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: 'Min', dataIndex: 'min_stock', key: 'min_stock', width: 70,

@@ -31,7 +31,7 @@ const createInvoiceSchema = [
     .isISO8601().withMessage('Date must be a valid ISO 8601 date'),
 
   body('items')
-    .isArray({ min: 1 }).withMessage('At least one item is required'),
+    .isArray({ min: 1, max: 500 }).withMessage('Invoice must have 1-500 items'),
 
   body('items.*.product_id')
     .isInt({ min: 1 }).withMessage('Product ID must be a positive integer'),

@@ -29,43 +29,50 @@ async function getAllProducts({ search, category, isActive, lowStockOnly, page =
   let idx = 1;
 
   if (search && search.trim()) {
-    conditions.push(`(name ILIKE $${idx} OR sku ILIKE $${idx} OR barcode ILIKE $${idx} OR category ILIKE $${idx})`);
+    conditions.push(`(p.name ILIKE $${idx} OR p.sku ILIKE $${idx} OR p.barcode ILIKE $${idx} OR p.category ILIKE $${idx})`);
     values.push(`%${search.trim()}%`);
     idx++;
   }
 
   if (category) {
-    conditions.push(`category = $${idx++}`);
+    conditions.push(`p.category = $${idx++}`);
     values.push(category);
   }
 
   if (isActive !== undefined) {
-    conditions.push(`is_active = $${idx++}`);
+    conditions.push(`p.is_active = $${idx++}`);
     values.push(isActive);
   }
 
   if (lowStockOnly) {
-    conditions.push('current_stock < min_stock');
+    conditions.push('p.current_stock < p.min_stock');
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   // Total count
   const countResult = await pool.query(
-    `SELECT COUNT(*) FROM products ${whereClause}`,
+    `SELECT COUNT(*) FROM products p ${whereClause}`,
     values,
   );
   const total = parseInt(countResult.rows[0].count, 10);
 
-  // Paginated results
+  // Paginated results with unit conversions
   const offset = (page - 1) * limit;
   values.push(limit, offset);
 
   const result = await pool.query(
-    `SELECT ${PRODUCT_COLUMNS}
-     FROM products
+    `SELECT p.id, p.name, p.category, p.brand, p.sku, p.barcode, p.unit,
+       p.hsn_code, p.gst_rate, p.mrp, p.wholesale_price, p.purchase_price,
+       p.current_stock, p.min_stock, p.is_active, p.created_at, p.updated_at,
+       (SELECT json_agg(json_build_object(
+          'id', uc.id, 'unit_name', uc.unit_name,
+          'conversion_value', uc.conversion_value
+        )) FROM product_unit_conversions uc WHERE uc.product_id = p.id
+       ) AS unit_conversions
+     FROM products p
      ${whereClause}
-     ORDER BY name ASC
+     ORDER BY p.name ASC
      LIMIT $${idx++} OFFSET $${idx++}`,
     values,
   );

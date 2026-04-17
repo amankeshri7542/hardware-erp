@@ -25,7 +25,7 @@ function errorHandler(err, req, res, _next) {
     const mapped = PG_ERROR_MAP[err.code];
     return res.status(mapped.status).json({
       success: false,
-      error: err.detail || mapped.message,
+      error: process.env.NODE_ENV === 'production' ? mapped.message : (err.detail || mapped.message),
       code: mapped.code,
     });
   }

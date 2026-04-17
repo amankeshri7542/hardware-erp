@@ -1,9 +1,16 @@
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false, // Ant Design needs inline styles
+  crossOriginEmbedderPolicy: false,
+}));
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
