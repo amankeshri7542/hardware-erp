@@ -100,7 +100,7 @@ export default function LoginPage() {
             <Input
               ref={emailRef}
               prefix={<MailOutlined />}
-              placeholder="e.g. 9431264113@umaep"
+              placeholder="Enter your username"
               size="large"
             />
           </Form.Item>
