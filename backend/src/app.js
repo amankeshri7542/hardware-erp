@@ -6,6 +6,9 @@ const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
+// Trust nginx reverse proxy (fixes express-rate-limit X-Forwarded-For error)
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet({
   contentSecurityPolicy: false, // Ant Design needs inline styles
