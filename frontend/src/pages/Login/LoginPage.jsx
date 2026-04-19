@@ -92,16 +92,15 @@ export default function LoginPage() {
         >
           <Form.Item
             name="email"
-            label="Email"
+            label="Username / Email"
             rules={[
-              { required: true, message: 'Please enter your email' },
-              { type: 'email', message: 'Please enter a valid email' },
+              { required: true, message: 'Please enter your username' },
             ]}
           >
             <Input
               ref={emailRef}
               prefix={<MailOutlined />}
-              placeholder="admin@example.com"
+              placeholder="e.g. 9431264113@umaep"
               size="large"
             />
           </Form.Item>
