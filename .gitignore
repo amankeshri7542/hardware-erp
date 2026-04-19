@@ -42,3 +42,4 @@ pdf-output/
 .ebextensions/*.bak
 .elasticbeanstalk/
 *.pid
+hardware-erp-key-ec2.pem
