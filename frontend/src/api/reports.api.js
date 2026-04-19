@@ -27,3 +27,19 @@ export const exportReport = async (reportName, params = {}) => {
   link.remove();
   window.URL.revokeObjectURL(url);
 };
+
+// PDF export — returns blob
+export const exportReportPdf = async (reportName, params = {}) => {
+  const response = await api.get(`/reports/${reportName}/export-pdf`, {
+    params,
+    responseType: 'blob',
+  });
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `${reportName}-report.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Table, Button, DatePicker, Tabs, Tag, Space, message } from 'antd';
-import { DownloadOutlined } from '@ant-design/icons';
+import { DownloadOutlined, FilePdfOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import ReportLayout from '../../components/Reports/ReportLayout';
-import { getGstReport, exportReport } from '../../api/reports.api';
+import { getGstReport, exportReport, exportReportPdf } from '../../api/reports.api';
 import { formatINR, formatDate } from '../../utils/formatCurrency';
 
 export default function GstReportPage() {
@@ -15,6 +15,7 @@ export default function GstReportPage() {
   const [rateSummary, setRateSummary] = useState([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -46,6 +47,18 @@ export default function GstReportPage() {
       message.error('Failed to export report');
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      await exportReportPdf('gst', { month: month.format('YYYY-MM') });
+      message.success('GST PDF exported');
+    } catch {
+      message.error('Failed to export PDF');
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -198,9 +211,10 @@ export default function GstReportPage() {
       <ReportLayout
         title="GST Report"
         exportButton={
-          <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>
-            Export Excel
-          </Button>
+          <>
+            <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>Export Excel</Button>
+            <Button icon={<FilePdfOutlined />} loading={exportingPdf} onClick={handleExportPdf} danger>Export PDF</Button>
+          </>
         }
         filters={filters}
         loading={loading}

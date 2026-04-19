@@ -15,4 +15,13 @@ router.get('/profit/export', controller.exportProfit);
 router.get('/collections/export', controller.exportCollections);
 router.get('/full-export', controller.exportFullData);
 
+// PDF export routes
+router.get('/sales/export-pdf', controller.exportSalesPdf);
+router.get('/gst/export-pdf', controller.exportGstPdf);
+router.get('/stock/export-pdf', controller.exportStockPdf);
+router.get('/stock-movement/export-pdf', controller.exportStockMovementPdf);
+router.get('/customer-dues/export-pdf', controller.exportCustomerDuesPdf);
+router.get('/profit/export-pdf', controller.exportProfitPdf);
+router.get('/collections/export-pdf', controller.exportCollectionsPdf);
+
 module.exports = router;

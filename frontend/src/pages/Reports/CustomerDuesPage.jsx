@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Row, Col, Card, Statistic, Table, Button, Select, Switch, Space, message } from 'antd';
-import { DownloadOutlined } from '@ant-design/icons';
+import { DownloadOutlined, FilePdfOutlined } from '@ant-design/icons';
 import ReportLayout from '../../components/Reports/ReportLayout';
-import { getCustomerDuesReport, exportReport } from '../../api/reports.api';
+import { getCustomerDuesReport, exportReport, exportReportPdf } from '../../api/reports.api';
 import { formatINR, formatDate } from '../../utils/formatCurrency';
 
 const { Option } = Select;
@@ -23,6 +23,7 @@ export default function CustomerDuesPage() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -58,6 +59,21 @@ export default function CustomerDuesPage() {
       message.error('Failed to export report');
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      const params = {};
+      if (customerType) params.type = customerType;
+      if (overdueOnly) params.overdue = true;
+      await exportReportPdf('customer-dues', params);
+      message.success('Customer dues PDF exported');
+    } catch {
+      message.error('Failed to export PDF');
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -179,9 +195,10 @@ export default function CustomerDuesPage() {
       <ReportLayout
         title="Customer Dues"
         exportButton={
-          <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>
-            Export Excel
-          </Button>
+          <>
+            <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>Export Excel</Button>
+            <Button icon={<FilePdfOutlined />} loading={exportingPdf} onClick={handleExportPdf} danger>Export PDF</Button>
+          </>
         }
         filters={filters}
         summary={summaryCards}

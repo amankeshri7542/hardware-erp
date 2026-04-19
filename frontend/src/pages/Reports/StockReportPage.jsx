@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Row, Col, Card, Statistic, Table, Button, Select, Switch, Space, Badge, Tag, message } from 'antd';
-import { DownloadOutlined, WarningOutlined } from '@ant-design/icons';
+import { DownloadOutlined, WarningOutlined, FilePdfOutlined } from '@ant-design/icons';
 import ReportLayout from '../../components/Reports/ReportLayout';
-import { getStockReport, getProductCategories, exportReport } from '../../api/reports.api';
+import { getStockReport, getProductCategories, exportReport, exportReportPdf } from '../../api/reports.api';
 import { formatINR } from '../../utils/formatCurrency';
 
 const { Option } = Select;
@@ -15,6 +15,7 @@ export default function StockReportPage() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   useEffect(() => {
     getProductCategories()
@@ -56,6 +57,21 @@ export default function StockReportPage() {
       message.error('Failed to export report');
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      const params = {};
+      if (category) params.category = category;
+      if (lowStockOnly) params.low_stock = true;
+      await exportReportPdf('stock', params);
+      message.success('Stock PDF exported');
+    } catch {
+      message.error('Failed to export PDF');
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -177,9 +193,10 @@ export default function StockReportPage() {
       <ReportLayout
         title="Stock Report"
         exportButton={
-          <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>
-            Export Excel
-          </Button>
+          <>
+            <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>Export Excel</Button>
+            <Button icon={<FilePdfOutlined />} loading={exportingPdf} onClick={handleExportPdf} danger>Export PDF</Button>
+          </>
         }
         filters={filters}
         summary={summaryCards}

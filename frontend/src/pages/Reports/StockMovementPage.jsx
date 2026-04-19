@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Row, Col, Card, Statistic, Table, Button, Select, Space, message, DatePicker } from 'antd';
-import { DownloadOutlined } from '@ant-design/icons';
+import { DownloadOutlined, FilePdfOutlined } from '@ant-design/icons';
 import ReportLayout from '../../components/Reports/ReportLayout';
-import { getStockMovementReport, exportReport } from '../../api/reports.api';
+import { getStockMovementReport, exportReport, exportReportPdf } from '../../api/reports.api';
 import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
@@ -13,6 +13,7 @@ export default function StockMovementPage() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -52,6 +53,23 @@ export default function StockMovementPage() {
       message.error('Failed to export report');
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      const params = {};
+      if (dateRange && dateRange[0] && dateRange[1]) {
+        params.from = dateRange[0].format('YYYY-MM-DD');
+        params.to = dateRange[1].format('YYYY-MM-DD');
+      }
+      await exportReportPdf('stock-movement', params);
+      message.success('Stock movement PDF exported');
+    } catch {
+      message.error('Failed to export PDF');
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -148,9 +166,10 @@ export default function StockMovementPage() {
       <ReportLayout
         title="Stock Movement Report"
         exportButton={
-          <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>
-            Export Excel
-          </Button>
+          <>
+            <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExport}>Export Excel</Button>
+            <Button icon={<FilePdfOutlined />} loading={exportingPdf} onClick={handleExportPdf} danger>Export PDF</Button>
+          </>
         }
         filters={filters}
         summary={summaryCards}
