@@ -89,11 +89,18 @@ jobs:
               })().catch(e => { console.error(e.message); process.exit(0); });
             "
 
+            echo ">>> Setting up PM2 log rotation"
+            pm2 install pm2-logrotate 2>/dev/null || true
+            pm2 set pm2-logrotate:max_size 10M
+            pm2 set pm2-logrotate:retain 3
+            pm2 set pm2-logrotate:compress true
+
             echo ">>> Restarting PM2 processes"
             pm2 restart all --update-env
 
             echo ">>> Cleaning up"
             rm -rf ~/frontend-dist
+            sudo journalctl --vacuum-size=50M 2>/dev/null || true
 
             echo ">>> Deployment complete"
             pm2 status
