@@ -75,6 +75,20 @@ jobs:
             echo ">>> Reloading nginx"
             sudo nginx -s reload
 
+            echo ">>> Running DB migrations"
+            cd ~/hardware-ERP/backend
+            node -e "
+              require('dotenv').config();
+              const { Pool } = require('pg');
+              const pool = new Pool({ host: process.env.DB_HOST, port: process.env.DB_PORT, database: process.env.DB_NAME, user: process.env.DB_USER, password: process.env.DB_PASSWORD, ssl: { rejectUnauthorized: false } });
+              (async () => {
+                await pool.query(\"UPDATE products SET sku = NULL WHERE sku = ''\");
+                await pool.query(\"UPDATE products SET barcode = NULL WHERE barcode = ''\");
+                console.log('DB cleanup done');
+                process.exit(0);
+              })().catch(e => { console.error(e.message); process.exit(0); });
+            "
+
             echo ">>> Restarting PM2 processes"
             pm2 restart all --update-env
 
