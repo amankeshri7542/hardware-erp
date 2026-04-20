@@ -96,6 +96,10 @@ async function getProductById(id) {
  * Handles pg 23505 (unique violation) for sku/barcode.
  */
 async function createProduct(data) {
+  // Convert empty strings to null for unique-constrained fields
+  if (data.sku !== undefined && !data.sku) data.sku = null;
+  if (data.barcode !== undefined && !data.barcode) data.barcode = null;
+
   // Auto-sync base_unit: if not explicitly provided, default to unit
   if (!data.base_unit && data.unit) {
     data.base_unit = data.unit;
@@ -147,6 +151,10 @@ async function createProduct(data) {
  * If current_stock is being changed, creates a stock_ledger entry.
  */
 async function updateProduct(id, data, userId) {
+  // Convert empty strings to null for unique-constrained fields
+  if (data.sku !== undefined && !data.sku) data.sku = null;
+  if (data.barcode !== undefined && !data.barcode) data.barcode = null;
+
   // Auto-sync base_unit when unit changes (unless base_unit explicitly provided)
   if (data.unit && !data.base_unit) {
     data.base_unit = data.unit;
