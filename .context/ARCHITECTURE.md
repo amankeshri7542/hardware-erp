@@ -1,6 +1,6 @@
 # Architecture
 
-> Last updated: 2026-04-17
+> Last updated: 2026-04-20
 
 ## System Overview
 
@@ -28,7 +28,7 @@ Nginx (reverse proxy + static files)
 | Layer | Technology |
 |-------|-----------|
 | Frontend | React 18 + Ant Design 5 + Zustand |
-| Backend | Express.js 4.18 + Helmet + express-rate-limit |
+| Backend | Express.js 4.18 + Helmet + CSP + express-rate-limit |
 | Database | PostgreSQL 15 (AWS RDS, ap-south-1) |
 | Queue | BullMQ + Redis (ioredis) |
 | PDF | Puppeteer 22 (headless Chrome) |
@@ -42,7 +42,8 @@ Nginx (reverse proxy + static files)
 
 | Component | Details |
 |-----------|---------|
-| EC2 | t2.micro, ap-south-1, Ubuntu 24.04, Elastic IP 13.204.240.166 |
+| EC2 | t3.micro (2 vCPU, 1GB RAM, unlimited burst), ap-south-1a, Ubuntu 24.04, Elastic IP 13.204.240.166 |
+| Swap | 1GB swapfile on EBS (`/swapfile`) — prevents OOM during PDF generation |
 | RDS | PostgreSQL 15, db.t3.micro, single-AZ |
 | S3 | `uma-erp-storage`, private, pre-signed URLs (1hr) |
 | SSL | **None yet** — HTTP only. Needs domain + Let's Encrypt |
@@ -66,6 +67,17 @@ Request → Helmet → CORS → Cookie Parser → JWT Auth → Validation → Co
 ```
 
 Login endpoint has rate limiting: 5 attempts per 15 minutes per IP.
+Global API rate limit: 200 requests per minute per IP.
+
+## Operations
+
+| Component | Detail |
+|-----------|--------|
+| PM2 log rotation | pm2-logrotate: 10MB max/file, 3 files retained, compressed |
+| System journal | Vacuumed to 50MB on each deploy |
+| PM2 memory limits | API: 400MB, Worker: 300MB (auto-restart on exceed) |
+| Swap | 1GB swapfile — safety net for Puppeteer/Chromium memory spikes |
+| CI/CD | GitHub Actions: build frontend on runner → SCP → git pull → pm2 restart |
 
 ## Invoice Creation Flow (10-Step Atomic Transaction)
 

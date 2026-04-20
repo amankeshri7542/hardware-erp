@@ -6,7 +6,7 @@
 **Stack:** Node.js + Express | React 18 + Ant Design 5 | PostgreSQL 15 (AWS RDS)
 **Live:** `http://13.204.240.166` — Login: `admin@store.local` / `Aman@9431`
 **Scale:** ~100-150 invoices/day, 2-3 users, single admin role
-**Last updated:** 2026-04-17
+**Last updated:** 2026-04-20
 
 Handles: retail/wholesale billing, inventory, customer ledgers (khata), payments, PDF invoices, GST reports, Excel exports, purchase management, sales returns, unit conversions.
 
@@ -46,7 +46,7 @@ hardware-erp/
 │   ├── api/                      # One file per module (axios-based)
 │   ├── components/               # AppLayout, ProductSearch, PWAInstallButton, etc.
 │   └── utils/                    # billing.calculations.js, formatCurrency.js
-├── db/migrations/                # 001-009, run in order
+├── db/migrations/                # 001-011, run in order
 ├── db/seeds/                     # Admin user, test data
 ├── .context/                     # Detailed documentation (9 files)
 └── deploy/                       # deploy.sh, nginx.conf
@@ -79,27 +79,20 @@ cd hardware-erp/frontend && npm run dev  # port 5173
 - `frontend/.env` — production API URL
 - `frontend/.env.local` — local dev (Vite proxy)
 
-## Production Deployment
+## Production Deployment (CI/CD — Automated)
 
-```bash
-# 1. Build frontend on Mac (t2.micro can't build)
-cd hardware-erp/frontend && npm run build
+Push to `main` triggers GitHub Actions (`.github/workflows/deploy.yml`):
+1. Builds frontend on GitHub runner (EC2 can't handle Vite builds)
+2. SCPs dist to EC2
+3. `git pull` + `npm install` on EC2
+4. Runs DB migrations (empty string cleanup, etc.)
+5. Sets up PM2 log rotation
+6. `pm2 restart all`
 
-# 2. Upload to EC2
-scp -i hardware-erp-key-ec2.pem -r dist/* ubuntu@13.204.240.166:~/frontend-dist/
+Manual deploy is only needed if CI/CD fails — see `deploy/deploy.sh`.
 
-# 3. SSH and deploy
-ssh -i hardware-erp-key-ec2.pem ubuntu@13.204.240.166
-cd ~/hardware-ERP && git pull origin main
-cd backend && npm install
-sudo rm -rf /var/www/hardware-erp/frontend/dist/*
-sudo cp -r ~/frontend-dist/* /var/www/hardware-erp/frontend/dist/
-sudo chown -R www-data:www-data /var/www/hardware-erp/frontend/dist
-sudo nginx -s reload
-pm2 restart all --update-env
-```
-
-**Infra:** EC2 t2.micro (ap-south-1) | RDS PostgreSQL 15 | S3 `uma-erp-storage` | nginx | PM2
+**Infra:** EC2 t3.micro (ap-south-1) | RDS PostgreSQL 15 | S3 `uma-erp-storage` | nginx | PM2
+**CI/CD:** GitHub Actions — push to main auto-builds frontend + deploys to EC2
 
 ## 5 Absolute Rules — Never Break These
 
@@ -128,7 +121,7 @@ Every product search/lookup must include: `id, name, sku, barcode, unit, mrp, wh
 - **NUMERIC(12,2)** for money in DB — never floating point
 - **Ant Design 5 only** — no Tailwind, shadcn, Material UI
 - **snake_case in DB/API** — frontend uses DB column names as-is
-- **Don't build on EC2** — t2.micro can't handle Vite builds
+- **Don't build on EC2** — t3.micro can't handle Vite builds (CI/CD builds on GitHub runner)
 
 ## Key Error Codes
 

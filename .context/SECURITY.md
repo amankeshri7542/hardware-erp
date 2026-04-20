@@ -1,6 +1,6 @@
 # Security
 
-> Last updated: 2026-04-17
+> Last updated: 2026-04-20
 
 ## What's Implemented
 
@@ -18,7 +18,8 @@
 - `X-Download-Options: noopen`
 - `X-XSS-Protection: 0` (modern recommendation)
 - `Referrer-Policy: no-referrer`
-- CSP disabled (Ant Design requires inline styles)
+- CSP enabled: `default-src 'self'`, allows `unsafe-inline` for Ant Design styles, blocks `object-src`, `frame-ancestors`
+- Global API rate limit: 200 requests/min per IP
 
 ### SQL Injection Prevention
 All queries use parameterized queries (`$1, $2, $3`). Zero string interpolation in SQL. Verified across all 11 service modules.
@@ -47,8 +48,7 @@ All queries use parameterized queries (`$1, $2, $3`). Zero string interpolation 
 |-------|------|-----|
 | **No HTTPS** | All data in plaintext, cookies interceptable | Buy domain + Let's Encrypt certbot |
 | **JWT secret is weak** | Token forgery possible | `openssl rand -hex 32` → update .env |
-| **Cookie `secure: false`** | Refresh token sent over HTTP | Set `true` after HTTPS |
-| **DB SSL `rejectUnauthorized: false`** | MitM on DB connection | Download RDS CA cert, enable validation |
+| **Cookie `secure: false`** | Refresh token sent over HTTP | Set `secure: true` after HTTPS (controlled by `HTTPS_ENABLED` env) |
 
 ### High
 | Issue | Risk | Fix |
@@ -62,7 +62,7 @@ All queries use parameterized queries (`$1, $2, $3`). Zero string interpolation 
 ### Medium
 | Issue | Risk | Fix |
 |-------|------|-----|
-| No nginx security headers | Missing HSTS, Permissions-Policy | Add to nginx.conf |
+| ~~No nginx security headers~~ | ~~Missing HSTS, Permissions-Policy~~ | **FIXED** — X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, server_tokens off |
 | Supervisor PIN plaintext | Weak auth for sensitive ops | Hash with bcrypt |
 | No npm audit in CI/CD | Dependency vulnerabilities | Add to GitHub Actions |
 | No CORS wildcard guard | Misconfiguration risk | Error on `CORS_ORIGIN=*` in production |
